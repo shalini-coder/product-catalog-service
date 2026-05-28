@@ -17,29 +17,43 @@ set -euo pipefail
 
 # ── Config — change these if you want ────────────────────────────────────────
 RESOURCE_GROUP="rg-product-catalog-poc"
-LOCATION="eastus"
+DEFAULT_LOCATION="eastus"
 ACR_NAME="acrproductcatalogpoc$RANDOM"   # random suffix avoids name collisions
 ACA_ENV="aca-env-poc"
 IMAGE_NAME="product-catalog-service"
 IMAGE_TAG="poc-$(git rev-parse --short HEAD 2>/dev/null || echo latest)"
+
+# Tags for resource organization and cost tracking
+TAGS="Project=product-catalog-poc Environment=poc Owner=shalini CostCenter=engineering"
 
 echo ""
 echo "================================================="
 echo "  Product Catalog POC — Azure Cloud Shell Deploy"
 echo "================================================="
 echo "  Resource Group : $RESOURCE_GROUP"
-echo "  Location       : $LOCATION"
 echo "  ACR Name       : $ACR_NAME"
 echo "================================================="
 echo ""
 
-# ── 1. Create Resource Group ──────────────────────────────────────────────────
-echo ">>> [1/6] Creating resource group..."
-az group create \
-    --name     "$RESOURCE_GROUP" \
-    --location "$LOCATION" \
-    --output   none
-echo "    Done."
+# ── 1. Create or Get Resource Group ───────────────────────────────────────────
+echo ">>> [1/6] Checking resource group..."
+
+RG_EXISTS=$(az group exists --name "$RESOURCE_GROUP" --output tsv)
+
+if [ "$RG_EXISTS" = "true" ]; then
+    echo "    Resource group already exists."
+    LOCATION=$(az group show --name "$RESOURCE_GROUP" --query "location" --output tsv)
+    echo "    Using existing location: $LOCATION"
+else
+    echo "    Creating new resource group in $DEFAULT_LOCATION..."
+    LOCATION="$DEFAULT_LOCATION"
+    az group create \
+        --name     "$RESOURCE_GROUP" \
+        --location "$LOCATION" \
+        --tags     $TAGS \
+        --output   none
+    echo "    Done."
+fi
 
 # ── 2. Create Azure Container Registry ───────────────────────────────────────
 echo ">>> [2/6] Creating container registry: $ACR_NAME"
@@ -48,6 +62,7 @@ az acr create \
     --name           "$ACR_NAME" \
     --sku            Basic \
     --admin-enabled  true \
+    --tags           $TAGS Component=registry \
     --output         none
 echo "    Done."
 
@@ -74,7 +89,8 @@ az containerapp env create \
     --name           "$ACA_ENV" \
     --resource-group "$RESOURCE_GROUP" \
     --location       "$LOCATION" \
-    --output         none
+    --tags           $TAGS \
+    --output         none 2>/dev/null || echo "    (Environment may already exist, continuing...)"
 echo "    Done."
 
 # ── 5. Deploy the full stack ───────────────────────────────────────────────────
