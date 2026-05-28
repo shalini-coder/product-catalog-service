@@ -28,7 +28,6 @@
         <mapstruct.version>1.5.5.Final</mapstruct.version>
         <!-- Azure -->
         <spring-cloud-azure.version>5.8.0</spring-cloud-azure.version>
-        <applicationinsights.version>3.5.2</applicationinsights.version>
     </properties>
 
     <dependencyManagement>
@@ -165,13 +164,6 @@
         <dependency>
             <groupId>com.azure.spring</groupId>
             <artifactId>spring-cloud-azure-starter</artifactId>
-        </dependency>
-
-        <!-- Application Insights (activate via applicationinsights.connection-string) -->
-        <dependency>
-            <groupId>com.microsoft.azure</groupId>
-            <artifactId>applicationinsights-spring-boot-starter</artifactId>
-            <version>${applicationinsights.version}</version>
         </dependency>
 
         <!-- Test -->
