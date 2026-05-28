@@ -41,7 +41,10 @@ jobs:
           distribution: temurin
           cache: maven
 
-      - name: Build (tests skipped for POC — Testcontainers needs full Docker env)
+      - name: Run tests
+        run: mvn -q verify
+
+      - name: Package (skip tests — already run above)
         run: mvn -q package -DskipTests
 
       - name: Get short SHA
