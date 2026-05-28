@@ -28,6 +28,7 @@
         <mapstruct.version>1.5.5.Final</mapstruct.version>
         <!-- Azure -->
         <spring-cloud-azure.version>5.8.0</spring-cloud-azure.version>
+        <applicationinsights.version>3.5.2</applicationinsights.version>
     </properties>
 
     <dependencyManagement>
@@ -256,6 +257,7 @@
                         <path>
                             <groupId>org.projectlombok</groupId>
                             <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
                         </path>
                         <path>
                             <groupId>org.mapstruct</groupId>
