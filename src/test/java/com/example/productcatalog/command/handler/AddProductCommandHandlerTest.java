@@ -1,6 +1,7 @@
 package com.example.productcatalog.command.handler;
 
 import com.example.productcatalog.command.model.AddProductCommand;
+import com.example.productcatalog.command.repository.DomainEventRepository;
 import com.example.productcatalog.command.repository.OutboxRepository;
 import com.example.productcatalog.command.repository.ProductRepository;
 import com.example.productcatalog.common.util.JsonUtil;
@@ -24,9 +25,10 @@ import static org.mockito.Mockito.*;
 @DisplayName("ProductCommandHandler — AddProduct")
 class AddProductCommandHandlerTest {
 
-    @Mock private ProductRepository productRepository;
-    @Mock private OutboxRepository  outboxRepository;
-    @Mock private JsonUtil          jsonUtil;
+    @Mock private ProductRepository     productRepository;
+    @Mock private OutboxRepository      outboxRepository;
+    @Mock private DomainEventRepository domainEventRepository;
+    @Mock private JsonUtil              jsonUtil;
 
     @InjectMocks
     private ProductCommandHandler handler;
