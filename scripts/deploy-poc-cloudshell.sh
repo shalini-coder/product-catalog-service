@@ -17,7 +17,6 @@ set -euo pipefail
 
 # ── Config — change these if you want ────────────────────────────────────────
 RESOURCE_GROUP="rg-product-catalog-poc"
-DEFAULT_LOCATION="eastus"
 ACR_NAME="acrproductcatalogpoc$RANDOM"   # random suffix avoids name collisions
 ACA_ENV="aca-env-poc"
 IMAGE_NAME="product-catalog-service"
@@ -35,25 +34,32 @@ echo "  ACR Name       : $ACR_NAME"
 echo "================================================="
 echo ""
 
-# ── 1. Create or Get Resource Group ───────────────────────────────────────────
+# ── 1. Verify Resource Group Exists ───────────────────────────────────────────
 echo ">>> [1/6] Checking resource group..."
 
 RG_EXISTS=$(az group exists --name "$RESOURCE_GROUP" --output tsv)
 
-if [ "$RG_EXISTS" = "true" ]; then
-    echo "    Resource group already exists."
-    LOCATION=$(az group show --name "$RESOURCE_GROUP" --query "location" --output tsv)
-    echo "    Using existing location: $LOCATION"
-else
-    echo "    Creating new resource group in $DEFAULT_LOCATION..."
-    LOCATION="$DEFAULT_LOCATION"
-    az group create \
-        --name     "$RESOURCE_GROUP" \
-        --location "$LOCATION" \
-        --tags     $TAGS \
-        --output   none
-    echo "    Done."
+if [ "$RG_EXISTS" != "true" ]; then
+    echo "ERROR: Resource group '$RESOURCE_GROUP' does not exist."
+    echo "       Please create it first or update RESOURCE_GROUP in this script."
+    exit 1
 fi
+
+LOCATION=$(az group show --name "$RESOURCE_GROUP" --query "location" --output tsv)
+echo "    Using existing resource group in: $LOCATION"
+
+# ── 1b. Register required resource providers ──────────────────────────────────
+echo ">>> [1b/6] Registering required Azure resource providers..."
+for PROVIDER in Microsoft.ContainerRegistry Microsoft.App Microsoft.OperationalInsights; do
+    STATE=$(az provider show --namespace "$PROVIDER" --query "registrationState" --output tsv 2>/dev/null || echo "NotFound")
+    if [ "$STATE" != "Registered" ]; then
+        echo "    Registering $PROVIDER ..."
+        az provider register --namespace "$PROVIDER" --wait
+        echo "    $PROVIDER registered."
+    else
+        echo "    $PROVIDER already registered."
+    fi
+done
 
 # ── 2. Create Azure Container Registry ───────────────────────────────────────
 echo ">>> [2/6] Creating container registry: $ACR_NAME"
