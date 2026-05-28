@@ -213,6 +213,148 @@ graph LR
 
 ---
 
+## Functional Requirements (FR)
+
+### Product Management API
+
+| # | Requirement | Endpoint | Access |
+|---|---|---|---|
+| FR-01 | Create a product | `POST /api/v1/products` | ADMIN |
+| FR-02 | Update a product | `PUT /api/v1/products/{id}` | ADMIN |
+| FR-03 | Add stock to a product | `POST /api/v1/products/{id}/stock` | ADMIN |
+| FR-04 | Remove stock from a product | `DELETE /api/v1/products/{id}/stock` | ADMIN |
+| FR-05 | Get product by ID | `GET /api/v1/products/{id}` | Public |
+| FR-06 | List all products (paginated) | `GET /api/v1/products` | Public |
+| FR-07 | Search products by name | `GET /api/v1/products/search?name=` | Public |
+| FR-08 | Authenticate and obtain JWT token | `POST /api/v1/auth/login` | Public |
+
+### Domain Rules (enforced in `ProductAggregate`)
+
+| # | Rule |
+|---|---|
+| FR-09 | Product name must not be blank |
+| FR-10 | Price must be greater than zero (validated at domain level) |
+| FR-11 | Stock cannot go negative — throws `InsufficientStockException` (422) |
+| FR-12 | All state changes raise immutable domain events (ProductAdded, ProductUpdated, StockAdded, StockRemoved) |
+
+### Architecture Patterns
+
+| Pattern | Implementation |
+|---|---|
+| **CQRS** | `ProductCommandHandler` (writes to PostgreSQL) / `ProductQueryHandler` (reads from Couchbase) |
+| **Transactional Outbox** | Domain events saved atomically to `outbox_events` table; `OutboxPoller` publishes to Kafka every 5 s |
+| **Event-Driven Projection** | `ProductEventConsumer` consumes Kafka events and maintains Couchbase read model |
+| **DDD Aggregate** | `ProductAggregate` enforces all invariants; no direct field mutation from outside |
+
+---
+
+## Non-Functional Requirements (NFR) & Metrics
+
+### ✅ Security
+
+| Requirement | Implementation | Status |
+|---|---|---|
+| Stateless authentication | JWT (JJWT 0.12.x, HMAC-SHA) — no server-side session | ✅ Done |
+| Token expiry | Configurable via `APP_SECURITY_JWT_EXPIRATION_MS` (default 24 h) | ✅ Done |
+| Role-based access control | `@PreAuthorize("hasRole('ADMIN')")` on all write endpoints | ✅ Done |
+| Password encoding | `DelegatingPasswordEncoder` — supports `{noop}`, `{bcrypt}`, others | ✅ Done |
+| API security documentation | Bearer JWT scheme in Swagger UI / OpenAPI spec | ✅ Done |
+| Environment-based security | Full JWT in `local`/`prod`; auth off in `poc`/`test` via profile-scoped `SecurityFilterChain` | ✅ Done |
+| Rate limiting | Not implemented | ❌ Gap |
+| Encryption at rest | Delegated to cloud infrastructure | ❌ Gap |
+
+---
+
+### ✅ Observability & Metrics
+
+| Signal | Endpoint / Mechanism | Status |
+|---|---|---|
+| **Liveness / Readiness** | `/actuator/health` — used as Docker `HEALTHCHECK`; Couchbase excluded from liveness probe | ✅ Done |
+| **Prometheus metrics** | `/actuator/prometheus` — JVM, HTTP, HikariCP, Kafka consumer lag metrics | ✅ Done |
+| **Spring Boot metrics** | `/actuator/metrics` — queryable programmatically | ✅ Done |
+| **Structured logging** | Logback + Logstash JSON encoder in `prod` profile (machine-parseable) | ✅ Done |
+| **Correlation ID** | `CorrelationIdFilter` — injects UUID per request, propagated via `X-Correlation-ID` header, stored in MDC | ✅ Done |
+| **Request/response logging** | `LoggingAspect` — AOP-based logging of all controller calls | ✅ Done |
+| **Distributed tracing** | Correlation ID propagated across services; no Zipkin/Jaeger/OTLP export yet | ⚠️ Partial |
+| **Alerting** | Not configured (Prometheus alerting rules needed) | ❌ Gap |
+
+Key metrics exposed via `/actuator/prometheus`:
+
+```
+# HTTP
+http_server_requests_seconds_count{uri="/api/v1/products"}
+http_server_requests_seconds_sum{outcome="SUCCESS"}
+
+# JVM
+jvm_memory_used_bytes{area="heap"}
+jvm_threads_live_threads
+
+# HikariCP (PostgreSQL pool)
+hikaricp_connections_active
+hikaricp_connections_pending
+
+# Kafka
+kafka_consumer_records_consumed_total
+kafka_consumer_fetch_manager_records_lag
+```
+
+---
+
+### ✅ Performance
+
+| Requirement | Implementation | Status |
+|---|---|---|
+| High I/O concurrency | Java 21 **virtual threads** (`spring.threads.virtual.enabled=true`) — thousands of concurrent requests on small thread pool | ✅ Done |
+| PostgreSQL connection pooling | HikariCP — `maximumPoolSize=10`, `minimumIdle=2` | ✅ Done |
+| Fast read path | Couchbase read model — denormalized projections, no joins required | ✅ Done |
+| Pagination | All list endpoints support `Pageable` (default page size 20) | ✅ Done |
+| Kafka consumer parallelism | `concurrency=3` listener containers per topic | ✅ Done |
+| Caching layer | Not implemented (Redis would reduce Couchbase round trips) | ❌ Gap |
+
+---
+
+### ✅ Reliability
+
+| Requirement | Implementation | Status |
+|---|---|---|
+| Guaranteed event delivery | **Transactional Outbox** — event and business data in one DB transaction; delivery is separate | ✅ Done |
+| At-least-once delivery | `OutboxPoller` retries unpublished events every 5 s; per-event exception handling | ✅ Done |
+| No message loss on consumer | Kafka `enable.auto.commit=false` + manual acknowledgement | ✅ Done |
+| Producer idempotency | `enable.idempotence=true`, `acks=all`, `retries=3` | ✅ Done |
+| Schema migrations | Flyway — `ddl-auto: validate`, Flyway owns schema lifecycle | ✅ Done |
+| Transaction isolation | Explicit `transactionManager = "transactionManager"` prevents Couchbase TM clash | ✅ Done |
+| Circuit breaker | Not implemented (Resilience4j recommended) | ❌ Gap |
+| Consumer-side idempotency | Not implemented — duplicate Kafka messages may create duplicate projections | ❌ Gap |
+
+---
+
+### ✅ Maintainability & Developer Experience
+
+| Requirement | Implementation | Status |
+|---|---|---|
+| API documentation | Swagger UI at `/swagger-ui/index.html`, full OpenAPI 3.0 spec | ✅ Done |
+| Input validation | Jakarta Bean Validation (`@Valid`, `@NotBlank`, `@DecimalMin`) on all request DTOs | ✅ Done |
+| Standardised error responses | `GlobalExceptionHandler` — consistent `ErrorResponse` JSON with status, message, path, timestamp | ✅ Done |
+| Unit tests | Mockito-based tests for all handlers, aggregate, and controller | ✅ Done |
+| Integration tests | Testcontainers (PostgreSQL) + EmbeddedKafka; Couchbase mocked | ✅ Done |
+| BDD tests | Cucumber 7 scenarios covering create, read, search, update, and stock operations | ✅ Done |
+| Multi-stage Docker build | Build in Maven container, run in slim JRE — image ~180 MB | ✅ Done |
+| Non-root container user | `spring` user in Dockerfile — reduced attack surface | ✅ Done |
+
+---
+
+### NFR Summary Dashboard
+
+```
+Security        ████████░░  80%   (missing: rate limiting, audit log)
+Observability   ███████░░░  70%   (missing: tracing export, alerting)
+Performance     ████████░░  80%   (missing: Redis cache)
+Reliability     ████████░░  80%   (missing: circuit breaker, idempotency key)
+Maintainability █████████░  90%   (missing: mutation testing)
+```
+
+---
+
 ## Quick Start
 
 ### Local (Docker Compose)
