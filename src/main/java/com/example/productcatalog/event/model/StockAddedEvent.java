@@ -1,11 +1,11 @@
 package com.example.productcatalog.event.model;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * Raised when stock is added to a product.
- */
 public class StockAddedEvent extends DomainEvent {
 
     private final UUID productId;
@@ -15,6 +15,20 @@ public class StockAddedEvent extends DomainEvent {
     public StockAddedEvent(UUID productId, int quantityAdded,
                            int newStockTotal, LocalDateTime occurredAt) {
         super("StockAdded", occurredAt);
+        this.productId     = productId;
+        this.quantityAdded = quantityAdded;
+        this.newStockTotal = newStockTotal;
+    }
+
+    @JsonCreator
+    public StockAddedEvent(
+            @JsonProperty("eventId")       UUID eventId,
+            @JsonProperty("eventType")     String eventType,
+            @JsonProperty("occurredAt")    LocalDateTime occurredAt,
+            @JsonProperty("productId")     UUID productId,
+            @JsonProperty("quantityAdded") int quantityAdded,
+            @JsonProperty("newStockTotal") int newStockTotal) {
+        super(eventId, eventType, occurredAt);
         this.productId     = productId;
         this.quantityAdded = quantityAdded;
         this.newStockTotal = newStockTotal;
