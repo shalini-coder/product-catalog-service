@@ -71,8 +71,13 @@ Feature: Product Management API
 
   @api @update
   Scenario: Update product details
-    Given a product exists with ID "prod-123"
-    When I send a PUT request to update product "prod-123" with:
+    Given I have valid product details:
+      | Field | Value          |
+      | Name  | Original Name  |
+      | Price | 999.99         |
+    When I send a POST request to create the product
+    Then the response status should be 201
+    When I send a PUT request to update the last created product with:
       | Field | Value    |
       | Name  | New Name |
       | Price | 1099.99  |

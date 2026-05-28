@@ -1,27 +1,50 @@
 spring:
   datasource:
-    url: jdbc:tc:postgresql:16-alpine:///productcatalog  # Testcontainers JDBC URL
+    url: jdbc:tc:postgresql:16-alpine:///productcatalog
     driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
   flyway:
     enabled: true
   jpa:
     hibernate:
       ddl-auto: validate
-    show-sql: true
-  couchbase:
-    connection-string: couchbase://localhost      # Override per test with @DynamicPropertySource
+    show-sql: false
+
+  # Disable Couchbase in tests — repositories are provided as @MockBean
+  data:
+    couchbase:
+      enabled: false
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.couchbase.CouchbaseAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.couchbase.CouchbaseDataAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.couchbase.CouchbaseRepositoriesAutoConfiguration
+
+  # Azure Key Vault disabled (no Azure in tests)
+  cloud:
+    azure:
+      keyvault:
+        secret:
+          enabled: false
+
+  # Kafka: tests that need Kafka use @EmbeddedKafka which overrides this via @DynamicPropertySource
   kafka:
-    bootstrap-servers: localhost:9092             # Override per test with @DynamicPropertySource
+    bootstrap-servers: localhost:9092
     consumer:
       group-id: product-catalog-test-group
+      auto-offset-reset: earliest
+    producer:
+      acks: all
 
 app:
   security:
     jwt:
-      secret: "test-secret-must-be-at-least-64-characters-long-for-hs512-algorithm"
+      secret: "test-secret-must-be-at-least-64-characters-long-for-hs512-algorithm!!"
       expiration-ms: 3600000
+  outbox:
+    poll-interval-ms: 500
 
 logging:
   level:
     com.example.productcatalog: DEBUG
-    org.springframework.kafka: INFO
+    org.springframework.kafka: WARN
+    org.testcontainers: WARN

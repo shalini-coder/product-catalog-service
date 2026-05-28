@@ -9,13 +9,23 @@ Feature: Product Stock Commands
     And the authentication is configured
 
   @api @stock
-  Scenario: Add stock to product
-    Given a product exists with ID "prod-stock-1" and name "Laptop"
+  Scenario: Add stock to a product
+    Given I have valid product details:
+      | Field | Value  |
+      | Name  | Laptop |
+      | Price | 999.99 |
     When I send a POST request to create the product
     Then the response status should be 201
+    When I send a POST request to add 50 units of stock to the last created product
+    Then the response status should be 200
 
   @api @stock @validation
   Scenario: Cannot remove more stock than available
-    Given a product exists with ID "prod-low-stock" and name "Laptop"
-    When I send a GET request for product "prod-low-stock"
-    Then the response status should be 200
+    Given I have valid product details:
+      | Field | Value       |
+      | Name  | Low Stock PC |
+      | Price | 599.99      |
+    When I send a POST request to create the product
+    Then the response status should be 201
+    When I send a DELETE request to remove 999 units of stock from the last created product
+    Then the response status should be 422

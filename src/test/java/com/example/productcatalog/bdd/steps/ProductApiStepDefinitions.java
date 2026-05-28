@@ -6,51 +6,90 @@ import com.example.productcatalog.command.repository.ProductRepository;
 import com.example.productcatalog.query.projection.ProductProjection;
 import com.example.productcatalog.query.repository.ProductProjectionRepository;
 import io.cucumber.datatable.DataTable;
+import io.cucumber.java.Before;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 import lombok.extern.slf4j.Slf4j;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 import static org.springframework.http.HttpStatus.*;
 
 /**
  * Gherkin step definitions for the Product API feature.
- *
- * <p>These tests run against a real embedded Spring Boot context
- * with Testcontainers for PostgreSQL and Kafka.
+ * Runs against a full Spring Boot context with Testcontainers for PostgreSQL.
+ * Couchbase and Kafka are mocked.
  */
 @Slf4j
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 public class ProductApiStepDefinitions {
 
-    @Autowired private TestRestTemplate             restTemplate;
-    @Autowired private ProductRepository            commandRepository;
-    @Autowired private ProductProjectionRepository  queryRepository;
+    @Autowired private TestRestTemplate  restTemplate;
+    @Autowired private ProductRepository commandRepository;
+
+    @MockBean private ProductProjectionRepository queryRepository;
+    @MockBean private KafkaTemplate<String, String> kafkaTemplate;
+
+    // ── In-memory projection store (backs the mock) ───────────────────────────
+    private final Map<String, ProductProjection> projections = new LinkedHashMap<>();
 
     // ── Shared scenario state ─────────────────────────────────────────────────
     private ResponseEntity<?> lastResponse;
     private String            lastProductId;
-    private Map<String, Object> productData = new HashMap<>();
+    private Map<String, Object> productData  = new HashMap<>();
     private List<ProductResponse> searchResults = new ArrayList<>();
+
+    // ── Before each scenario ──────────────────────────────────────────────────
+
+    @Before
+    public void resetState() {
+        projections.clear();
+        lastResponse  = null;
+        lastProductId = null;
+        productData   = new HashMap<>();
+        searchResults = new ArrayList<>();
+
+        commandRepository.deleteAll();
+
+        // Reset mock and reconfigure with in-memory behaviour
+        Mockito.reset(queryRepository);
+        when(queryRepository.findById(anyString()))
+                .thenAnswer(inv -> Optional.ofNullable(projections.get(inv.getArgument(0))));
+        when(queryRepository.findByNameContainingIgnoreCase(anyString()))
+                .thenAnswer(inv -> {
+                    String term = ((String) inv.getArgument(0)).toLowerCase();
+                    return projections.values().stream()
+                            .filter(p -> p.getName() != null && p.getName().toLowerCase().contains(term))
+                            .toList();
+                });
+        when(queryRepository.findAll(org.mockito.ArgumentMatchers.any(
+                org.springframework.data.domain.Pageable.class)))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+    }
 
     // ── Background ────────────────────────────────────────────────────────────
 
     @Given("the database is initialized")
     public void databaseIsInitialized() {
-        queryRepository.deleteAll();
-        commandRepository.deleteAll();
+        // resetState() already clears everything
     }
 
     // ── Setup ─────────────────────────────────────────────────────────────────
@@ -58,7 +97,7 @@ public class ProductApiStepDefinitions {
     @Given("I have valid product details:")
     public void iHaveValidProductDetails(DataTable dataTable) {
         Map<String, String> data = dataTable.asMap(String.class, String.class);
-        productData.put("name",        data.getOrDefault("Name",  "Test Product"));
+        productData.put("name",        data.getOrDefault("Name", "Test Product"));
         productData.put("description", data.getOrDefault("Description", ""));
         productData.put("price",       new BigDecimal(data.getOrDefault("Price", "9.99")));
     }
@@ -81,16 +120,34 @@ public class ProductApiStepDefinitions {
     @When("I send a POST request to create the product")
     public void iSendPostRequestToCreateProduct() {
         ProductRequest req = ProductRequest.builder()
-                .name((String)          productData.get("name"))
-                .description((String)   productData.getOrDefault("description", ""))
-                .price((BigDecimal)     productData.get("price"))
+                .name((String)       productData.get("name"))
+                .description((String) productData.getOrDefault("description", ""))
+                .price((BigDecimal)  productData.get("price"))
                 .build();
 
-        lastResponse = restTemplate.postForEntity("/api/v1/products", req, ProductResponse.class);
+        lastResponse = restTemplate.postForEntity("/api/v1/products", req, Void.class);
 
-        if (lastResponse.getBody() instanceof ProductResponse pr && pr.getId() != null) {
-            lastProductId = pr.getId();
+        // Extract ID from Location header (controller returns 201 with Location, no body)
+        if (lastResponse.getStatusCode() == CREATED && lastResponse.getHeaders().getLocation() != null) {
+            String location = lastResponse.getHeaders().getLocation().toString();
+            lastProductId = location.substring(location.lastIndexOf('/') + 1);
         }
+    }
+
+    @When("I send a PUT request to update the last created product with:")
+    public void iSendPutRequestToUpdateLastProduct(DataTable dataTable) {
+        assertThat(lastProductId).as("No product was created yet").isNotBlank();
+        Map<String, String> data = dataTable.asMap(String.class, String.class);
+        ProductRequest req = ProductRequest.builder()
+                .name(data.get("Name"))
+                .price(new BigDecimal(data.get("Price")))
+                .build();
+
+        lastResponse = restTemplate.exchange(
+                "/api/v1/products/" + lastProductId,
+                HttpMethod.PUT,
+                new HttpEntity<>(req),
+                Void.class);
     }
 
     @When("I send a PUT request to update product {string} with:")
@@ -108,6 +165,22 @@ public class ProductApiStepDefinitions {
                 Void.class);
     }
 
+    @When("I send a POST request to add {int} units of stock to the last created product")
+    public void iSendPostRequestToAddStock(int quantity) {
+        assertThat(lastProductId).as("No product was created yet").isNotBlank();
+        lastResponse = restTemplate.postForEntity(
+                "/api/v1/products/" + lastProductId + "/stock?quantity=" + quantity,
+                null, Void.class);
+    }
+
+    @When("I send a DELETE request to remove {int} units of stock from the last created product")
+    public void iSendDeleteRequestToRemoveStock(int quantity) {
+        assertThat(lastProductId).as("No product was created yet").isNotBlank();
+        lastResponse = restTemplate.exchange(
+                "/api/v1/products/" + lastProductId + "/stock?quantity=" + quantity,
+                HttpMethod.DELETE, null, Void.class);
+    }
+
     // ── Queries ───────────────────────────────────────────────────────────────
 
     @When("I send a GET request for product {string}")
@@ -121,9 +194,9 @@ public class ProductApiStepDefinitions {
         var response = restTemplate.getForEntity(
                 "/api/v1/products/search?name=" + searchTerm, ProductResponse[].class);
         lastResponse = response;
-        if (response.getBody() != null) {
-            searchResults = Arrays.asList(response.getBody());
-        }
+        searchResults = response.getBody() != null
+                ? Arrays.asList(response.getBody())
+                : new ArrayList<>();
     }
 
     // ── Assertions ────────────────────────────────────────────────────────────
@@ -170,26 +243,32 @@ public class ProductApiStepDefinitions {
 
     @Then("the product should be persisted in PostgreSQL")
     public void productShouldBePersistedInPostgres() {
+        assertThat(lastProductId).isNotBlank();
         assertThat(commandRepository.findById(UUID.fromString(lastProductId))).isPresent();
     }
 
     @Then("the CouchBase read model should be updated")
-    public void couchbaseReadModelShouldBeUpdated() throws InterruptedException {
-        Thread.sleep(1000); // Allow event consumer to process
-        assertThat(queryRepository.findById(lastProductId)).isPresent();
+    public void couchbaseReadModelShouldBeUpdated() {
+        assertThat(lastProductId).isNotBlank();
+        // Awaitility waits for the mock to be called by the async event consumer
+        await().atMost(5, TimeUnit.SECONDS)
+               .pollInterval(200, TimeUnit.MILLISECONDS)
+               .untilAsserted(() ->
+                       assertThat(queryRepository.findById(lastProductId)).isPresent());
     }
 
     // ── Test data helpers ─────────────────────────────────────────────────────
 
     @Given("a product exists with ID {string} and name {string}")
-    public void productExistsWithIdAndName(String id, String name) {
+    public void productExistsWithIdAndName(String scenarioId, String name) {
         ProductProjection p = new ProductProjection();
-        p.setId(id);
+        p.setId(scenarioId);
         p.setName(name);
         p.setPrice(new BigDecimal("999.99"));
         p.setStockQuantity(10);
-        queryRepository.save(p);
-        lastProductId = id;
+        projections.put(scenarioId, p);
+        // mock is already configured in resetState() to read from the projections map
+        lastProductId = scenarioId;
     }
 
     @Given("a product exists with ID {string}")
@@ -199,7 +278,7 @@ public class ProductApiStepDefinitions {
 
     @Given("no product with ID {string} exists")
     public void noProductWithIdExists(String productId) {
-        queryRepository.deleteById(productId);
+        projections.remove(productId);
     }
 
     @Given("the following products exist:")
@@ -209,7 +288,8 @@ public class ProductApiStepDefinitions {
             p.setId(row.get("ID"));
             p.setName(row.get("Name"));
             p.setPrice(new BigDecimal(row.get("Price")));
-            queryRepository.save(p);
+            p.setStockQuantity(10);
+            projections.put(p.getId(), p);
         });
     }
 }
