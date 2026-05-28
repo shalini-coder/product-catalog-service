@@ -155,9 +155,9 @@ module containerApp 'modules/container-app.bicep' = {
     deploymentMode: deploymentMode
     jwtSecret: jwtSecret
     appInsightsConnectionString: appInsights.properties.ConnectionString
-    postgresHost: deploymentMode == 'managed-services' ? postgres.outputs.fqdn : ''
-    eventhubNamespace: deploymentMode == 'managed-services' ? eventHub.outputs.namespaceName : ''
-    eventhubConnectionString: deploymentMode == 'managed-services' ? eventHub.outputs.primaryConnectionString : ''
+    postgresHost: deploymentMode == 'managed-services' ? postgres!.outputs.fqdn : ''
+    eventhubNamespace: deploymentMode == 'managed-services' ? eventHub!.outputs.namespaceName : ''
+    eventhubConnectionString: deploymentMode == 'managed-services' ? eventHub!.outputs.primaryConnectionString : ''
   }
 }
 

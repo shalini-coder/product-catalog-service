@@ -40,9 +40,8 @@ var dockerOnlyEnv = [
 
 var managedServicesEnv = [
   { name: 'SPRING_PROFILES_ACTIVE', value: 'azure' }
-  { name: 'SPRING_DATASOURCE_URL',
-    value: 'jdbc:postgresql://${postgresHost}:5432/productcatalog?sslmode=require' }
-  { name: 'AZURE_EVENTHUB_NAMESPACE',   value: eventhubNamespace }
+  { name: 'SPRING_DATASOURCE_URL', value: 'jdbc:postgresql://${postgresHost}:5432/productcatalog?sslmode=require' }
+  { name: 'AZURE_EVENTHUB_NAMESPACE', value: eventhubNamespace }
   { name: 'AZURE_APPINSIGHTS_CONNECTION_STRING', value: appInsightsConnectionString }
 ]
 

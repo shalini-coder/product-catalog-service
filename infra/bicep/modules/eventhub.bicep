@@ -56,5 +56,6 @@ resource sendListenPolicy 'Microsoft.EventHub/namespaces/authorizationRules@2023
 }
 
 output namespaceName string = namespace.name
+#disable-next-line outputs-should-not-contain-secrets
 output primaryConnectionString string = sendListenPolicy.listKeys().primaryConnectionString
 output bootstrapServers string = '${namespace.name}.servicebus.windows.net:9093'
