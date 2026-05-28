@@ -109,40 +109,61 @@ else
 fi
 
 ACR_SERVER="${ACR_NAME}.azurecr.io"
-FULL_IMAGE="${ACR_SERVER}/${IMAGE_NAME}:${IMAGE_TAG}"
 
-# ── 3. Build and push Docker image ────────────────────────────────────────────
-echo ">>> [3/6] Building and pushing Docker image..."
-echo "    Image: $FULL_IMAGE"
+# ── 3. Wait for image built by GitHub Actions ─────────────────────────────────
+echo ">>> [3/6] Checking for Docker image in ACR..."
+echo ""
+echo "  ACR Tasks are blocked on this subscription."
+echo "  The image must be pushed via GitHub Actions (already configured in"
+echo "  .github/workflows/azure-deploy.yml)."
+echo ""
+echo "  ── GitHub Secrets required ─────────────────────────────────────────"
 
-# Try ACR Tasks first; fall back to local docker build+push if Tasks are blocked
-if az acr build \
-        --registry  "$ACR_NAME" \
-        --image     "${IMAGE_NAME}:${IMAGE_TAG}" \
-        --image     "${IMAGE_NAME}:latest" \
-        --file      Dockerfile \
-        . 2>&1 | tee /tmp/acr_build.log | grep -v "TasksOperationsNotAllowed"; then
-    echo "    Image built and stored in ACR (via ACR Tasks)."
-else
-    if grep -q "TasksOperationsNotAllowed" /tmp/acr_build.log; then
-        echo "    ACR Tasks blocked on this subscription — falling back to docker build + push..."
-        echo "    Logging into ACR..."
-        az acr login --name "$ACR_NAME"
+ACR_ADMIN_USER=$(az acr credential show --name "$ACR_NAME" --query "username" --output tsv)
+ACR_ADMIN_PASS=$(az acr credential show --name "$ACR_NAME" --query "passwords[0].value" --output tsv)
 
-        echo "    Building image locally (Cloud Shell Docker)..."
-        docker build -t "${IMAGE_NAME}:${IMAGE_TAG}" -f Dockerfile .
-        docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "$FULL_IMAGE"
-        docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "${ACR_SERVER}/${IMAGE_NAME}:latest"
+echo "  Add these at: https://github.com/<your-repo>/settings/secrets/actions"
+echo ""
+echo "    ACR_NAME              = $ACR_NAME"
+echo "    AZURE_RESOURCE_GROUP  = $RESOURCE_GROUP"
+echo "    AZURE_CREDENTIALS     = <service-principal JSON — see note below>"
+echo ""
+echo "  To create AZURE_CREDENTIALS:"
+echo "    az ad sp create-for-rbac --name sp-product-catalog-poc \\"
+echo "      --role contributor \\"
+echo "      --scopes /subscriptions/\$(az account show --query id -o tsv)/resourceGroups/$RESOURCE_GROUP \\"
+echo "      --sdk-auth"
+echo ""
+echo "  ────────────────────────────────────────────────────────────────────"
+echo "  Push your code to main to trigger the GitHub Actions build."
+echo "  This script will wait up to 30 minutes for the image to appear."
+echo "  Press Ctrl+C to exit and re-run this script after the image is ready."
+echo ""
 
-        echo "    Pushing to ACR..."
-        docker push "$FULL_IMAGE"
-        docker push "${ACR_SERVER}/${IMAGE_NAME}:latest"
-        echo "    Image pushed to ACR (via docker push)."
-    else
-        echo "ERROR: Image build failed. See /tmp/acr_build.log for details."
-        exit 1
+# Poll ACR for the image (every 20s, up to 30 min)
+IMAGE_TAG_FOUND=""
+for i in $(seq 1 90); do
+    IMAGE_TAG_FOUND=$(az acr repository show-tags \
+        --name "$ACR_NAME" \
+        --repository "$IMAGE_NAME" \
+        --orderby time_desc \
+        --output tsv 2>/dev/null | head -1 || true)
+    if [ -n "$IMAGE_TAG_FOUND" ]; then
+        echo "    Image found: ${IMAGE_NAME}:${IMAGE_TAG_FOUND}"
+        break
     fi
+    echo "    [$i/90] Image not in ACR yet — waiting 20s..."
+    sleep 20
+done
+
+if [ -z "$IMAGE_TAG_FOUND" ]; then
+    echo "ERROR: Image '${IMAGE_NAME}' not found in ACR after 30 minutes."
+    echo "       Trigger the GitHub Actions workflow and re-run this script."
+    exit 1
 fi
+
+FULL_IMAGE="${ACR_SERVER}/${IMAGE_NAME}:${IMAGE_TAG_FOUND}"
+echo "    Deploying image: $FULL_IMAGE"
 
 # ── 4. Create Container Apps Environment ──────────────────────────────────────
 echo ">>> [4/6] Creating Container Apps environment..."
