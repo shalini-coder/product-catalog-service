@@ -6,8 +6,9 @@ using '../main.bicep'
 
 param deploymentMode       = 'docker-only'
 param environment          = 'dev'
-param location             = 'eastus'
+param location             = 'centralindia'
 param appName              = 'product-catalog'
+param existingAcrName      = 'acrproductcatalogpoc'
 param postgresAdminLogin   = 'catalogadmin'
 
 // Secrets: supply via --parameters flag or Azure DevOps variable groups —

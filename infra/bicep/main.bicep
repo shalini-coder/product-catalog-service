@@ -35,6 +35,9 @@ param location string = resourceGroup().location
 @description('Name prefix for all resources')
 param appName string = 'product-catalog'
 
+@description('Name of an existing ACR to use. If empty, a new ACR is created.')
+param existingAcrName string = ''
+
 @description('PostgreSQL administrator login (managed-services only)')
 param postgresAdminLogin string = 'catalogadmin'
 
@@ -53,22 +56,24 @@ param couchbasePassword string = ''
 // ── Variables ─────────────────────────────────────────────────────────────────
 
 var suffix        = '${appName}-${environment}'
-var acrName       = replace('acr${appName}${environment}', '-', '')
+var generatedAcrName = replace('acr${appName}${environment}', '-', '')
+var resolvedAcrName  = empty(existingAcrName) ? generatedAcrName : existingAcrName
 var acaEnvName    = 'acaenv-${suffix}'
 var appInsName    = 'appi-${suffix}'
 var kvName        = 'kv-${suffix}'
 
 // ── Azure Container Registry ──────────────────────────────────────────────────
+// Creates a new ACR when existingAcrName is empty; otherwise references the existing one.
 
-resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
-  name: acrName
+resource newAcr 'Microsoft.ContainerRegistry/registries@2023-07-01' = if (empty(existingAcrName)) {
+  name: generatedAcrName
   location: location
-  sku: {
-    name: 'Basic'
-  }
-  properties: {
-    adminUserEnabled: true
-  }
+  sku: { name: 'Basic' }
+  properties: { adminUserEnabled: true }
+}
+
+resource existingAcr 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = if (!empty(existingAcrName)) {
+  name: existingAcrName
 }
 
 // ── Container Apps Managed Environment ───────────────────────────────────────
@@ -144,14 +149,18 @@ module keyVault 'modules/keyvault.bicep' = if (deploymentMode == 'managed-servic
 
 // ── Container App (application) ───────────────────────────────────────────────
 
+var acrLoginServer = empty(existingAcrName)
+  ? newAcr!.properties.loginServer
+  : existingAcr!.properties.loginServer
+
 module containerApp 'modules/container-app.bicep' = {
   name: 'deploy-container-app'
   params: {
     suffix: suffix
     location: location
     acaEnvId: acaEnv.id
-    acrLoginServer: acr.properties.loginServer
-    acrName: acr.name
+    acrLoginServer: acrLoginServer
+    acrName: resolvedAcrName
     deploymentMode: deploymentMode
     jwtSecret: jwtSecret
     appInsightsConnectionString: appInsights.properties.ConnectionString
@@ -163,6 +172,6 @@ module containerApp 'modules/container-app.bicep' = {
 
 // ── Outputs ───────────────────────────────────────────────────────────────────
 
-output acrLoginServer string = acr.properties.loginServer
+output acrLoginServer string = acrLoginServer
 output containerAppUrl string = containerApp.outputs.appUrl
 output appInsightsConnectionString string = appInsights.properties.ConnectionString
