@@ -8,7 +8,7 @@ param deploymentMode       = 'docker-only'
 param environment          = 'dev'
 param location             = 'centralindia'
 param appName              = 'product-catalog'
-param existingAcrName      = 'acrproductcatalogpoc'
+param existingAcrName      = ''
 param postgresAdminLogin   = 'catalogadmin'
 
 // Secrets: supply via --parameters flag or Azure DevOps variable groups —
