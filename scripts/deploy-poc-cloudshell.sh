@@ -111,19 +111,38 @@ fi
 ACR_SERVER="${ACR_NAME}.azurecr.io"
 FULL_IMAGE="${ACR_SERVER}/${IMAGE_NAME}:${IMAGE_TAG}"
 
-# ── 3. Build image IN AZURE (no local Docker required!) ───────────────────────
-echo ">>> [3/6] Building Docker image in Azure (az acr build)..."
+# ── 3. Build and push Docker image ────────────────────────────────────────────
+echo ">>> [3/6] Building and pushing Docker image..."
 echo "    Image: $FULL_IMAGE"
-echo "    This takes ~4-6 minutes the first time..."
 
-az acr build \
-    --registry        "$ACR_NAME" \
-    --image           "${IMAGE_NAME}:${IMAGE_TAG}" \
-    --image           "${IMAGE_NAME}:latest" \
-    --file            Dockerfile \
-    .                                          # sends current directory to ACR
+# Try ACR Tasks first; fall back to local docker build+push if Tasks are blocked
+if az acr build \
+        --registry  "$ACR_NAME" \
+        --image     "${IMAGE_NAME}:${IMAGE_TAG}" \
+        --image     "${IMAGE_NAME}:latest" \
+        --file      Dockerfile \
+        . 2>&1 | tee /tmp/acr_build.log | grep -v "TasksOperationsNotAllowed"; then
+    echo "    Image built and stored in ACR (via ACR Tasks)."
+else
+    if grep -q "TasksOperationsNotAllowed" /tmp/acr_build.log; then
+        echo "    ACR Tasks blocked on this subscription — falling back to docker build + push..."
+        echo "    Logging into ACR..."
+        az acr login --name "$ACR_NAME"
 
-echo "    Image built and stored in ACR."
+        echo "    Building image locally (Cloud Shell Docker)..."
+        docker build -t "${IMAGE_NAME}:${IMAGE_TAG}" -f Dockerfile .
+        docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "$FULL_IMAGE"
+        docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "${ACR_SERVER}/${IMAGE_NAME}:latest"
+
+        echo "    Pushing to ACR..."
+        docker push "$FULL_IMAGE"
+        docker push "${ACR_SERVER}/${IMAGE_NAME}:latest"
+        echo "    Image pushed to ACR (via docker push)."
+    else
+        echo "ERROR: Image build failed. See /tmp/acr_build.log for details."
+        exit 1
+    fi
+fi
 
 # ── 4. Create Container Apps Environment ──────────────────────────────────────
 echo ">>> [4/6] Creating Container Apps environment..."
