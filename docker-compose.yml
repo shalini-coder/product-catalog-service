@@ -2,23 +2,6 @@ version: "3.9"
 
 services:
 
-  # ── PostgreSQL (write side) ─────────────────────────────────────────────────
-  postgres:
-    image: postgres:16-alpine
-    container_name: product-catalog-postgres
-    environment:
-      POSTGRES_DB: productcatalog
-      POSTGRES_USER: catalog_user
-      POSTGRES_PASSWORD: catalog_pass
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U catalog_user -d productcatalog"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   # ── Couchbase (read side) ───────────────────────────────────────────────────
   couchbase:
@@ -30,7 +13,7 @@ services:
     volumes:
       - couchbase_data:/opt/couchbase/var
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8091/pools"]
+      test: ["CMD", "curl", "-f", "-u", "Administrator:password", "http://localhost:8091/pools"]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -77,28 +60,38 @@ services:
     command:
       - |
         set -e
-        echo "Initializing Couchbase cluster..."
-        curl -sf http://couchbase:8091/pools > /dev/null || (echo "Couchbase not ready" && exit 1)
+        echo "Checking Couchbase cluster..."
 
-        curl -sf -X POST http://couchbase:8091/node/controller/rename \
-          -d hostname=127.0.0.1
+        # If already initialized (returns 200 with credentials), skip setup
+        if curl -sf -u Administrator:password http://couchbase:8091/pools/default > /dev/null 2>&1; then
+          echo "Cluster already initialized, skipping setup."
+        else
+          echo "Initializing Couchbase cluster..."
+          curl -sf -X POST http://couchbase:8091/node/controller/rename \
+            -d hostname=127.0.0.1
+          curl -sf -X POST http://couchbase:8091/node/controller/setupServices \
+            -d services=kv,n1ql,index
+          curl -sf -X POST http://couchbase:8091/settings/web \
+            -d username=Administrator -d password=password -d port=SAME
+          curl -sf -X POST http://couchbase:8091/pools/default \
+            -u Administrator:password \
+            -d memoryQuota=512 -d indexMemoryQuota=256
+          echo "Cluster initialized."
+        fi
 
-        curl -sf -X POST http://couchbase:8091/node/controller/setupServices \
-          -d services=kv,n1ql,index
+        # Create bucket if it doesn't exist
+        if curl -sf -u Administrator:password http://couchbase:8091/pools/default/buckets/product-catalog > /dev/null 2>&1; then
+          echo "Bucket 'product-catalog' already exists."
+        else
+          echo "Creating bucket 'product-catalog'..."
+          curl -sf -X POST http://couchbase:8091/pools/default/buckets \
+            -u Administrator:password \
+            -d name=product-catalog -d bucketType=couchbase \
+            -d ramQuotaMB=256 -d replicaNumber=0 -d authType=none
+          echo "Bucket created."
+        fi
 
-        curl -sf -X POST http://couchbase:8091/settings/web \
-          -d username=Administrator -d password=password -d port=SAME
-
-        curl -sf -X POST http://couchbase:8091/pools/default \
-          -u Administrator:password \
-          -d memoryQuota=512 -d indexMemoryQuota=256
-
-        curl -sf -X POST http://couchbase:8091/pools/default/buckets \
-          -u Administrator:password \
-          -d name=product-catalog -d bucketType=couchbase \
-          -d ramQuotaMB=256 -d replicaNumber=0 -d authType=none
-
-        echo "Couchbase initialized."
+        echo "Couchbase ready."
 
   # ── Application ─────────────────────────────────────────────────────────────
   product-catalog-service:
@@ -106,8 +99,6 @@ services:
     build: .
     container_name: product-catalog-service
     depends_on:
-      postgres:
-        condition: service_healthy
       kafka:
         condition: service_healthy
       couchbase-init:
@@ -116,9 +107,9 @@ services:
       - "8080:8080"
     environment:
       SPRING_PROFILES_ACTIVE: local
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/productcatalog
-      SPRING_DATASOURCE_USERNAME: catalog_user
-      SPRING_DATASOURCE_PASSWORD: catalog_pass
+      SPRING_DATASOURCE_URL: jdbc:postgresql://host.docker.internal:5432/productcatalog
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
       SPRING_COUCHBASE_CONNECTION_STRING: couchbase://couchbase
       SPRING_COUCHBASE_USERNAME: Administrator
       SPRING_COUCHBASE_PASSWORD: password
@@ -127,5 +118,4 @@ services:
       APP_SECURITY_JWT_EXPIRATION_MS: 86400000
 
 volumes:
-  postgres_data:
   couchbase_data:

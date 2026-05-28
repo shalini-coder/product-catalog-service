@@ -17,8 +17,8 @@ spring:
   # ── PostgreSQL (write side) ─────────────────────────────────────────────────
   datasource:
     url: jdbc:postgresql://localhost:5432/productcatalog
-    username: catalog_user
-    password: catalog_pass
+    username: postgres
+    password: postgres
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
