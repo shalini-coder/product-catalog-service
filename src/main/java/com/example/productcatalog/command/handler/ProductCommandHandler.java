@@ -4,12 +4,14 @@ import com.example.productcatalog.command.model.AddProductCommand;
 import com.example.productcatalog.command.model.AddStockCommand;
 import com.example.productcatalog.command.model.RemoveStockCommand;
 import com.example.productcatalog.command.model.UpdateProductCommand;
+import com.example.productcatalog.command.repository.DomainEventRepository;
 import com.example.productcatalog.command.repository.OutboxRepository;
 import com.example.productcatalog.command.repository.ProductRepository;
 import com.example.productcatalog.common.util.JsonUtil;
 import com.example.productcatalog.domain.exception.ProductNotFoundException;
 import com.example.productcatalog.domain.model.ProductAggregate;
 import com.example.productcatalog.event.model.DomainEvent;
+import com.example.productcatalog.infrastructure.persistence.DomainEventEntity;
 import com.example.productcatalog.infrastructure.persistence.OutboxEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,23 +21,15 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * Application-layer service that executes all product write commands.
- *
- * <p>Each method is a single transactional unit: it loads the aggregate,
- * applies the domain operation, persists changes, and saves domain events
- * to the outbox table — all within one transaction.
- *
- * <p>Constructor injection is used throughout; no field {@code @Autowired}.
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ProductCommandHandler {
 
-    private final ProductRepository    productRepository;
-    private final OutboxRepository     outboxRepository;
-    private final JsonUtil             jsonUtil;
+    private final ProductRepository     productRepository;
+    private final OutboxRepository      outboxRepository;
+    private final DomainEventRepository domainEventRepository;
+    private final JsonUtil              jsonUtil;
 
     // ── Commands ──────────────────────────────────────────────────────────────
 
@@ -49,7 +43,7 @@ public class ProductCommandHandler {
                 command.getPrice());
 
         productRepository.save(product);
-        saveToOutbox(product);
+        saveEvents(product);
 
         log.info("Product created: id={}", product.getId());
         return product.getId();
@@ -60,11 +54,10 @@ public class ProductCommandHandler {
         log.info("Handling UpdateProductCommand: productId={}", command.getProductId());
 
         ProductAggregate product = loadOrThrow(command.getProductId());
-
         product.update(command.getName(), command.getDescription(), command.getPrice());
 
         productRepository.save(product);
-        saveToOutbox(product);
+        saveEvents(product);
 
         log.info("Product updated: id={}", command.getProductId());
     }
@@ -74,11 +67,10 @@ public class ProductCommandHandler {
         log.info("Handling AddStockCommand: productId={}, qty={}", command.getProductId(), command.getQuantity());
 
         ProductAggregate product = loadOrThrow(command.getProductId());
-
         product.addStock(command.getQuantity());
 
         productRepository.save(product);
-        saveToOutbox(product);
+        saveEvents(product);
 
         log.info("Stock added: productId={}, newTotal={}", command.getProductId(), product.getStockQuantity());
     }
@@ -88,11 +80,10 @@ public class ProductCommandHandler {
         log.info("Handling RemoveStockCommand: productId={}, qty={}", command.getProductId(), command.getQuantity());
 
         ProductAggregate product = loadOrThrow(command.getProductId());
-
         product.removeStock(command.getQuantity());
 
         productRepository.save(product);
-        saveToOutbox(product);
+        saveEvents(product);
 
         log.info("Stock removed: productId={}, newTotal={}", command.getProductId(), product.getStockQuantity());
     }
@@ -105,20 +96,34 @@ public class ProductCommandHandler {
     }
 
     /**
-     * Saves raised domain events to the outbox table within the same transaction.
-     * The {@link com.example.productcatalog.infrastructure.persistence.OutboxPoller}
-     * reads them and publishes to Kafka asynchronously.
+     * For each domain event raised by the aggregate:
+     *  1. Writes to outbox_events  — picked up by OutboxPoller → Kafka (transient)
+     *  2. Writes to domain_events  — permanent append-only audit log
+     * Both writes are in the same transaction as the aggregate save.
      */
-    private void saveToOutbox(ProductAggregate product) {
+    private void saveEvents(ProductAggregate product) {
         for (DomainEvent event : product.getDomainEvents()) {
-            OutboxEvent outboxEvent = new OutboxEvent();
-            outboxEvent.setId(UUID.randomUUID());
-            outboxEvent.setEventType(event.getEventType());
-            outboxEvent.setAggregateId(product.getId());
-            outboxEvent.setPayload(jsonUtil.toJson(event));
-            outboxEvent.setPublished(false);
-            outboxEvent.setCreatedAt(LocalDateTime.now());
-            outboxRepository.save(outboxEvent);
+            String payload = jsonUtil.toJson(event);
+
+            // 1. Outbox — for Kafka delivery
+            OutboxEvent outbox = new OutboxEvent();
+            outbox.setId(UUID.randomUUID());
+            outbox.setEventType(event.getEventType());
+            outbox.setAggregateId(product.getId());
+            outbox.setPayload(payload);
+            outbox.setPublished(false);
+            outbox.setCreatedAt(LocalDateTime.now());
+            outboxRepository.save(outbox);
+
+            // 2. Audit log — permanent record of every event
+            DomainEventEntity audit = new DomainEventEntity();
+            audit.setEventId(event.getEventId());
+            audit.setAggregateId(product.getId());
+            audit.setAggregateType("Product");
+            audit.setEventType(event.getEventType());
+            audit.setPayload(payload);
+            audit.setOccurredAt(event.getOccurredAt());
+            domainEventRepository.save(audit);
         }
         product.clearEvents();
     }
