@@ -67,7 +67,7 @@ jobs:
   # ── 2. Push to ACR ───────────────────────────────────────────────────────────
   push-to-acr:
     name: Push to Azure Container Registry
-    needs: build
+    needs: [build, deploy-infra]
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.environment || 'dev' }}
 
@@ -85,12 +85,12 @@ jobs:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Login to ACR
-        run: az acr login --name ${{ secrets.ACR_NAME }}
+        run: az acr login --name acrproductcatalogdev
 
       - name: Tag and push image
         run: |
           SHORT_SHA=${{ needs.build.outputs.short-sha }}
-          ACR_SERVER=${{ secrets.ACR_NAME }}.azurecr.io
+          ACR_SERVER=acrproductcatalogdev.azurecr.io
 
           docker tag ${{ env.IMAGE_NAME }}:${SHORT_SHA} ${ACR_SERVER}/${{ env.IMAGE_NAME }}:${SHORT_SHA}
           docker tag ${{ env.IMAGE_NAME }}:${SHORT_SHA} ${ACR_SERVER}/${{ env.IMAGE_NAME }}:latest
@@ -101,7 +101,7 @@ jobs:
   # ── 3. Deploy Infrastructure (first run / on infra change) ───────────────────
   deploy-infra:
     name: Deploy Azure Infrastructure
-    needs: push-to-acr
+    needs: build
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.environment || 'dev' }}
     if: github.ref == 'refs/heads/main'
