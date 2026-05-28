@@ -1,0 +1,33 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# docker-compose.local-azure.yml
+#
+# Runs the application locally but connects to:
+#   • Azure Database for PostgreSQL Flexible Server  (no local postgres container)
+#   • Couchbase Capella on Azure                     (no local couchbase container)
+#   • Azure Event Hubs (Kafka protocol)              (no local kafka container)
+#
+# Usage:
+#   1. Copy .env.azure.example → .env.azure.local  and fill in values
+#   2. docker compose -f docker-compose.local-azure.yml --env-file .env.azure.local up
+# ─────────────────────────────────────────────────────────────────────────────
+
+version: "3.9"
+
+services:
+  product-catalog-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: product-catalog-local-azure
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env.azure.local           # your local copy — NOT committed to git
+    environment:
+      SPRING_PROFILES_ACTIVE: local-azure
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: on-failure

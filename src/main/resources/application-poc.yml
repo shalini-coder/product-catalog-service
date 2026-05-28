@@ -1,0 +1,17 @@
+# ── POC profile — overrides for local / Azure Container Apps demo ─────────────
+# Security is fully open (see PocSecurityConfig.java).
+# All other defaults come from application.yml.
+
+spring:
+  jpa:
+    show-sql: true          # See every SQL statement — useful while demoing
+
+logging:
+  level:
+    com.example.productcatalog: DEBUG   # Verbose so you can watch CQRS flow
+    org.springframework.kafka: INFO
+
+management:
+  endpoint:
+    health:
+      show-details: always  # Full health breakdown visible without auth

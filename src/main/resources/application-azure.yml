@@ -1,0 +1,114 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Azure Cloud profile  (SPRING_PROFILES_ACTIVE=azure)
+#
+# All secrets are resolved in order:
+#   1. Environment variables (Container Apps secrets / GitHub Actions secrets)
+#   2. Azure Key Vault  →  spring.cloud.azure.keyvault.secret.enabled=true
+#      Key Vault secret names map to Spring property paths by replacing '.' → '-'
+#      e.g.  spring.datasource.password  →  Key Vault secret "spring-datasource-password"
+# ──────────────────────────────────────────────────────────────────────────────
+
+spring:
+
+  # ── Key Vault (auto-resolves ${} placeholders from vault secrets) ──────────
+  cloud:
+    azure:
+      keyvault:
+        secret:
+          enabled: true
+          endpoint: ${AZURE_KEYVAULT_ENDPOINT}   # https://<vault-name>.vault.azure.net/
+          # Uses Managed Identity when running in Container Apps (no client-id needed)
+          # For local-azure dev: set AZURE_CLIENT_ID / AZURE_CLIENT_SECRET / AZURE_TENANT_ID
+
+  # ── Azure Database for PostgreSQL - Flexible Server ───────────────────────
+  datasource:
+    # Format: jdbc:postgresql://<server>.postgres.database.azure.com:5432/<db>?sslmode=require
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}    # resolved from Key Vault or env var
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5                     # Flexible Server has connection limits
+      minimum-idle: 1
+      connection-timeout: 30000
+      ssl: true                                # enforce SSL at pool level too
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+  # ── Couchbase Capella (Azure) ──────────────────────────────────────────────
+  # Capella always uses TLS — the scheme is "couchbases://" (note the 's')
+  couchbase:
+    connection-string: ${SPRING_COUCHBASE_CONNECTION_STRING}   # couchbases://<cluster>.cloud.couchbase.com
+    username: ${SPRING_COUCHBASE_USERNAME}
+    password: ${SPRING_COUCHBASE_PASSWORD}     # resolved from Key Vault or env var
+  data:
+    couchbase:
+      bucket-name: ${SPRING_COUCHBASE_BUCKET_NAME:product-catalog}
+
+  # ── Azure Event Hubs  (Kafka-compatible, port 9093, SASL_SSL) ─────────────
+  kafka:
+    # Format: <namespace>.servicebus.windows.net:9093
+    bootstrap-servers: ${AZURE_EVENTHUB_NAMESPACE}.servicebus.windows.net:9093
+    properties:
+      security.protocol: SASL_SSL
+      sasl.mechanism: PLAIN
+      sasl.jaas.config: >-
+        org.apache.kafka.common.security.plain.PlainLoginModule required
+        username="$ConnectionString"
+        password="${AZURE_EVENTHUB_CONNECTION_STRING}";
+    consumer:
+      group-id: ${AZURE_EVENTHUB_CONSUMER_GROUP:product-catalog-cg}
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+    producer:
+      acks: all
+      retries: 3
+
+# ── Azure Application Insights ────────────────────────────────────────────────
+applicationinsights:
+  connection-string: ${AZURE_APPINSIGHTS_CONNECTION_STRING}
+  instrumentation:
+    logging:
+      level: WARN
+    micrometer:
+      enabled: true
+
+# ── Actuator — expose metrics for Azure Monitor scraping ─────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always    # Container Apps health probes need full detail
+  metrics:
+    export:
+      azuremonitor:
+        enabled: true
+        instrumentation-key: ${AZURE_APPINSIGHTS_INSTRUMENTATION_KEY:}
+
+# ── App secrets (pulled from Key Vault by the azure starter) ─────────────────
+app:
+  security:
+    jwt:
+      secret: ${APP_JWT_SECRET}     # Key Vault secret: "app-jwt-secret"
+      expiration-ms: 86400000
+  outbox:
+    poll-interval-ms: 10000   # slower poll on cloud saves DB connections
+
+logging:
+  level:
+    com.example.productcatalog: INFO
+    com.azure: WARN
+    org.springframework.kafka: WARN

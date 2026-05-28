@@ -1,0 +1,95 @@
+spring:
+  application:
+    name: product-catalog-service
+
+  # ── Java 21 virtual threads (Project Loom) ─────────────────────────────────
+  threads:
+    virtual:
+      enabled: true
+
+  # ── Azure Key Vault — disabled locally; enable only in azure profile ────────
+  cloud:
+    azure:
+      keyvault:
+        secret:
+          enabled: false
+
+  # ── PostgreSQL (write side) ─────────────────────────────────────────────────
+  datasource:
+    url: jdbc:postgresql://localhost:5432/productcatalog
+    username: catalog_user
+    password: catalog_pass
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  jpa:
+    hibernate:
+      ddl-auto: validate        # Flyway owns the schema
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+  # ── Flyway ─────────────────────────────────────────────────────────────────
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+  # ── Couchbase (read side) ───────────────────────────────────────────────────
+  couchbase:
+    connection-string: couchbase://localhost
+    username: Administrator
+    password: password
+  data:
+    couchbase:
+      bucket-name: product-catalog
+
+  # ── Kafka ──────────────────────────────────────────────────────────────────
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: product-catalog-group
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+    producer:
+      acks: all
+      retries: 3
+
+# ── Server ───────────────────────────────────────────────────────────────────
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+# ── Actuator ─────────────────────────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# ── App-specific ─────────────────────────────────────────────────────────────
+app:
+  security:
+    jwt:
+      secret: "change-me-in-production-must-be-at-least-64-characters-long!!!!!!!!"
+      expiration-ms: 86400000   # 24 h
+  outbox:
+    poll-interval-ms: 5000
+  kafka:
+    topics:
+      inventory-sync: inventory.sync
+
+# ── Logging ──────────────────────────────────────────────────────────────────
+logging:
+  config: classpath:config/logback-spring.xml
+  level:
+    com.example.productcatalog: INFO
+    org.springframework.kafka: WARN

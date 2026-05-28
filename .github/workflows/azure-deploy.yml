@@ -1,0 +1,161 @@
+name: Build & Deploy to Azure
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options: [dev, prod]
+      deployment_mode:
+        description: 'Deployment mode'
+        required: true
+        default: 'docker-only'
+        type: choice
+        options: [docker-only, managed-services]
+
+env:
+  JAVA_VERSION: '21'
+  IMAGE_NAME: product-catalog-service
+
+jobs:
+  # ── 1. Build & Test ─────────────────────────────────────────────────────────
+  build:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      short-sha: ${{ steps.sha.outputs.short }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+      - name: Run tests
+        run: ./mvnw -q verify
+
+      - name: Get short SHA
+        id: sha
+        run: echo "short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --tag ${{ env.IMAGE_NAME }}:${{ steps.sha.outputs.short }} \
+            --tag ${{ env.IMAGE_NAME }}:latest \
+            .
+
+      - name: Save image as artifact
+        run: docker save ${{ env.IMAGE_NAME }}:${{ steps.sha.outputs.short }} | gzip > image.tar.gz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: image.tar.gz
+          retention-days: 1
+
+  # ── 2. Push to ACR ───────────────────────────────────────────────────────────
+  push-to-acr:
+    name: Push to Azure Container Registry
+    needs: build
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+
+      - name: Load Docker image
+        run: docker load < image.tar.gz
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Login to ACR
+        run: az acr login --name ${{ secrets.ACR_NAME }}
+
+      - name: Tag and push image
+        run: |
+          SHORT_SHA=${{ needs.build.outputs.short-sha }}
+          ACR_SERVER=${{ secrets.ACR_NAME }}.azurecr.io
+
+          docker tag ${{ env.IMAGE_NAME }}:${SHORT_SHA} ${ACR_SERVER}/${{ env.IMAGE_NAME }}:${SHORT_SHA}
+          docker tag ${{ env.IMAGE_NAME }}:${SHORT_SHA} ${ACR_SERVER}/${{ env.IMAGE_NAME }}:latest
+
+          docker push ${ACR_SERVER}/${{ env.IMAGE_NAME }}:${SHORT_SHA}
+          docker push ${ACR_SERVER}/${{ env.IMAGE_NAME }}:latest
+
+  # ── 3. Deploy Infrastructure (first run / on infra change) ───────────────────
+  deploy-infra:
+    name: Deploy Azure Infrastructure
+    needs: push-to-acr
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy Bicep
+        uses: azure/arm-deploy@v2
+        with:
+          resourceGroupName: ${{ secrets.AZURE_RESOURCE_GROUP }}
+          template: infra/bicep/main.bicep
+          parameters: >
+            infra/bicep/parameters/${{ github.event.inputs.environment || 'dev' }}.bicepparam
+            jwtSecret=${{ secrets.APP_JWT_SECRET }}
+            postgresAdminPassword=${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+            couchbasePassword=${{ secrets.COUCHBASE_PASSWORD }}
+            deploymentMode=${{ github.event.inputs.deployment_mode || 'docker-only' }}
+          failOnStdErr: false
+
+  # ── 4. Update Container App image ────────────────────────────────────────────
+  deploy-app:
+    name: Deploy Application
+    needs: [push-to-acr, deploy-infra]
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+
+    steps:
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Update Container App image
+        run: |
+          SHORT_SHA=${{ needs.build.outputs.short-sha }}
+          ACR_SERVER=${{ secrets.ACR_NAME }}.azurecr.io
+          ENV=${{ github.event.inputs.environment || 'dev' }}
+
+          az containerapp update \
+            --name "ca-product-catalog-${ENV}" \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --image "${ACR_SERVER}/${{ env.IMAGE_NAME }}:${SHORT_SHA}"
+
+      - name: Show app URL
+        run: |
+          ENV=${{ github.event.inputs.environment || 'dev' }}
+          az containerapp show \
+            --name "ca-product-catalog-${ENV}" \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --query "properties.configuration.ingress.fqdn" \
+            --output tsv

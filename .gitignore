@@ -1,0 +1,30 @@
+# Build output
+target/
+*.jar
+*.war
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.classpath
+*.project
+*.settings/
+
+# Secrets — never commit
+.env.azure.local
+.env.local
+.env
+*.env.local
+secrets/
+
+# Spring Boot
+spring-boot-*/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db

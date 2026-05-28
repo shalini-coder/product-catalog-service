@@ -1,0 +1,84 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Local-Azure profile  (SPRING_PROFILES_ACTIVE=local-azure)
+#
+# Use this when you want to run the application on your laptop but connect to
+# real Azure services (Azure PostgreSQL, Couchbase Capella, Azure Event Hubs).
+#
+# Prerequisites:
+#   1. Your local IP is whitelisted on Azure PostgreSQL firewall rules
+#   2. Your local IP is whitelisted on Couchbase Capella "Allowed IPs"
+#   3. You have an Azure Event Hubs namespace connection string
+#   4. Copy .env.azure.example → .env.azure.local and fill in real values
+#   5. Load the env file before starting:   source .env.azure.local
+#      (or set them in your IDE run config)
+# ──────────────────────────────────────────────────────────────────────────────
+
+spring:
+
+  # Key Vault is optional for local dev — comment out if using env vars directly
+  cloud:
+    azure:
+      keyvault:
+        secret:
+          enabled: ${AZURE_KEYVAULT_ENABLED:false}
+          endpoint: ${AZURE_KEYVAULT_ENDPOINT:}
+
+  # ── Azure Database for PostgreSQL - Flexible Server ───────────────────────
+  datasource:
+    url: jdbc:postgresql://${AZURE_POSTGRES_HOST}.postgres.database.azure.com:5432/${AZURE_POSTGRES_DB:productcatalog}?sslmode=require
+    username: ${AZURE_POSTGRES_USER}
+    password: ${AZURE_POSTGRES_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5
+      connection-timeout: 30000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true             # helpful during local development
+
+  flyway:
+    enabled: true
+
+  # ── Couchbase Capella (Azure) ──────────────────────────────────────────────
+  # Capella enforces TLS — always use couchbases:// (with 's')
+  couchbase:
+    connection-string: couchbases://${AZURE_COUCHBASE_HOST}
+    username: ${AZURE_COUCHBASE_USERNAME}
+    password: ${AZURE_COUCHBASE_PASSWORD}
+  data:
+    couchbase:
+      bucket-name: ${AZURE_COUCHBASE_BUCKET:product-catalog}
+
+  # ── Azure Event Hubs — Kafka-compatible endpoint ───────────────────────────
+  kafka:
+    bootstrap-servers: ${AZURE_EVENTHUB_NAMESPACE}.servicebus.windows.net:9093
+    properties:
+      security.protocol: SASL_SSL
+      sasl.mechanism: PLAIN
+      sasl.jaas.config: >-
+        org.apache.kafka.common.security.plain.PlainLoginModule required
+        username="$ConnectionString"
+        password="${AZURE_EVENTHUB_CONNECTION_STRING}";
+    consumer:
+      group-id: local-dev-group         # isolated group so you don't consume prod messages
+      auto-offset-reset: latest
+      enable-auto-commit: false
+    producer:
+      acks: all
+      retries: 3
+
+app:
+  security:
+    jwt:
+      secret: ${APP_JWT_SECRET:local-azure-dev-secret-at-least-64-chars-long-placeholder!!}
+      expiration-ms: 86400000
+  outbox:
+    poll-interval-ms: 5000
+
+logging:
+  level:
+    com.example.productcatalog: DEBUG
+    org.springframework.kafka: INFO
+    com.azure: WARN

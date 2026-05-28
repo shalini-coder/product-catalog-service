@@ -1,0 +1,27 @@
+spring:
+  datasource:
+    url: jdbc:tc:postgresql:16-alpine:///productcatalog  # Testcontainers JDBC URL
+    driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
+  flyway:
+    enabled: true
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+  couchbase:
+    connection-string: couchbase://localhost      # Override per test with @DynamicPropertySource
+  kafka:
+    bootstrap-servers: localhost:9092             # Override per test with @DynamicPropertySource
+    consumer:
+      group-id: product-catalog-test-group
+
+app:
+  security:
+    jwt:
+      secret: "test-secret-must-be-at-least-64-characters-long-for-hs512-algorithm"
+      expiration-ms: 3600000
+
+logging:
+  level:
+    com.example.productcatalog: DEBUG
+    org.springframework.kafka: INFO

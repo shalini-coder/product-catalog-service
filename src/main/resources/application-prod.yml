@@ -1,0 +1,14 @@
+# Production profile overrides
+spring:
+  jpa:
+    show-sql: false
+
+logging:
+  level:
+    com.example.productcatalog: WARN
+    root: ERROR
+
+management:
+  endpoint:
+    health:
+      show-details: never
