@@ -65,6 +65,7 @@ services:
 
   # ── Application ─────────────────────────────────────────────────────────────
   product-catalog-service:
+    image: product-catalog-service:local
     build: .
     container_name: product-catalog-service
     depends_on:
@@ -75,7 +76,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      SPRING_PROFILES_ACTIVE: prod
+      SPRING_PROFILES_ACTIVE: local
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/productcatalog
       SPRING_DATASOURCE_USERNAME: catalog_user
       SPRING_DATASOURCE_PASSWORD: catalog_pass
@@ -83,6 +84,8 @@ services:
       SPRING_COUCHBASE_USERNAME: Administrator
       SPRING_COUCHBASE_PASSWORD: password
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      APP_SECURITY_JWT_SECRET: local-dev-secret-key-minimum-32-chars-long
+      APP_SECURITY_JWT_EXPIRATION_MS: 86400000
 
 volumes:
   postgres_data:

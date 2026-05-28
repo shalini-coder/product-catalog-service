@@ -12,7 +12,7 @@ RUN --mount=type=cache,target=/root/.m2 \
 COPY src src
 
 RUN --mount=type=cache,target=/root/.m2 \
-    mvn -q package -DskipTests && \
+    mvn -q package -Dmaven.test.skip=true && \
     mkdir -p target/extracted && \
     java -Djarmode=layertools -jar target/*.jar extract --destination target/extracted
 

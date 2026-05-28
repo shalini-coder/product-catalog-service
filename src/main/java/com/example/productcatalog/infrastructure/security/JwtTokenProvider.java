@@ -8,12 +8,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
-import java.security.Key;
+import javax.crypto.SecretKey;
 import java.util.Date;
 
-/**
- * JWT token generation and validation.
- */
 @Slf4j
 @Component
 public class JwtTokenProvider {
@@ -24,32 +21,32 @@ public class JwtTokenProvider {
     @Value("${app.security.jwt.expiration-ms:86400000}")
     private long jwtExpirationMs;
 
-    private Key signingKey() {
+    private SecretKey signingKey() {
         return Keys.hmacShaKeyFor(jwtSecret.getBytes());
     }
 
     public String generateToken(Authentication authentication) {
         UserDetails principal = (UserDetails) authentication.getPrincipal();
         return Jwts.builder()
-                .setSubject(principal.getUsername())
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + jwtExpirationMs))
-                .signWith(signingKey(), SignatureAlgorithm.HS512)
+                .subject(principal.getUsername())
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + jwtExpirationMs))
+                .signWith(signingKey())
                 .compact();
     }
 
     public String getUsernameFromToken(String token) {
-        return Jwts.parserBuilder()
-                .setSigningKey(signingKey())
+        return Jwts.parser()
+                .verifyWith(signingKey())
                 .build()
-                .parseClaimsJws(token)
-                .getBody()
+                .parseSignedClaims(token)
+                .getPayload()
                 .getSubject();
     }
 
     public boolean validateToken(String token) {
         try {
-            Jwts.parserBuilder().setSigningKey(signingKey()).build().parseClaimsJws(token);
+            Jwts.parser().verifyWith(signingKey()).build().parseSignedClaims(token);
             return true;
         } catch (JwtException | IllegalArgumentException ex) {
             log.warn("Invalid JWT token: {}", ex.getMessage());
