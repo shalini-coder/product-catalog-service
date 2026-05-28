@@ -93,6 +93,18 @@ services:
 
         echo "Couchbase ready."
 
+  # ── Kafka UI (browse topics, messages, consumer groups) ─────────────────────
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: product-catalog-kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "9000:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+
   # ── Application ─────────────────────────────────────────────────────────────
   product-catalog-service:
     image: product-catalog-service:local
