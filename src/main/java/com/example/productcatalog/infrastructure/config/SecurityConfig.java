@@ -20,12 +20,13 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 /**
  * Spring Security configuration — stateless JWT.
+ * Excluded from poc and test profiles (they have their own security configs).
  */
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
 @RequiredArgsConstructor
-@Profile("!poc")   // replaced by PocSecurityConfig when running under the poc profile
+@Profile("!poc & !test")
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
