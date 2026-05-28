@@ -14,8 +14,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.util.List;
 
 /**
@@ -31,7 +29,6 @@ public class ProductQueryHandler {
 
     private final ProductProjectionRepository projectionRepository;
 
-    @Transactional(readOnly = true)
     public ProductDto handle(GetProductQuery query) {
         log.debug("Handling GetProductQuery: productId={}", query.getProductId());
 
@@ -40,14 +37,12 @@ public class ProductQueryHandler {
                 .orElseThrow(() -> new ProductNotFoundException(query.getProductId()));
     }
 
-    @Transactional(readOnly = true)
     public Page<ProductDto> handle(GetAllProductsQuery query) {
         log.debug("Handling GetAllProductsQuery, pageable={}", query.getPageable());
 
         return projectionRepository.findAll(query.getPageable()).map(this::toDto);
     }
 
-    @Transactional(readOnly = true)
     public List<ProductDto> handle(SearchProductsByNameQuery query) {
         log.debug("Handling SearchProductsByNameQuery: name={}", query.getName());
 
@@ -57,7 +52,6 @@ public class ProductQueryHandler {
                 .toList();
     }
 
-    @Transactional(readOnly = true)
     public List<ProductDto> handle(GetProductsByPriceRangeQuery query) {
         log.debug("Handling GetProductsByPriceRangeQuery: {}-{}", query.getMinPrice(), query.getMaxPrice());
 
@@ -67,7 +61,6 @@ public class ProductQueryHandler {
                 .toList();
     }
 
-    @Transactional(readOnly = true)
     public List<ProductDto> handle(GetProductsByTagQuery query) {
         log.debug("Handling GetProductsByTagQuery: tag={}", query.getTag());
 
@@ -77,7 +70,6 @@ public class ProductQueryHandler {
                 .toList();
     }
 
-    @Transactional(readOnly = true)
     public List<ProductDto> handle(GetInStockProductsQuery query) {
         log.debug("Handling GetInStockProductsQuery");
 

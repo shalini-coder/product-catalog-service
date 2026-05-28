@@ -39,7 +39,7 @@ public class ProductCommandHandler {
 
     // ── Commands ──────────────────────────────────────────────────────────────
 
-    @Transactional
+    @Transactional(transactionManager = "transactionManager")
     public UUID handle(AddProductCommand command) {
         log.info("Handling AddProductCommand: name={}", command.getName());
 
@@ -55,7 +55,7 @@ public class ProductCommandHandler {
         return product.getId();
     }
 
-    @Transactional
+    @Transactional(transactionManager = "transactionManager")
     public void handle(UpdateProductCommand command) {
         log.info("Handling UpdateProductCommand: productId={}", command.getProductId());
 
@@ -69,7 +69,7 @@ public class ProductCommandHandler {
         log.info("Product updated: id={}", command.getProductId());
     }
 
-    @Transactional
+    @Transactional(transactionManager = "transactionManager")
     public void handle(AddStockCommand command) {
         log.info("Handling AddStockCommand: productId={}, qty={}", command.getProductId(), command.getQuantity());
 
@@ -83,7 +83,7 @@ public class ProductCommandHandler {
         log.info("Stock added: productId={}, newTotal={}", command.getProductId(), product.getStockQuantity());
     }
 
-    @Transactional
+    @Transactional(transactionManager = "transactionManager")
     public void handle(RemoveStockCommand command) {
         log.info("Handling RemoveStockCommand: productId={}, qty={}", command.getProductId(), command.getQuantity());
 
