@@ -42,7 +42,7 @@ jobs:
           cache: maven
 
       - name: Run tests
-        run: ./mvnw -q verify
+        run: mvn -q verify
 
       - name: Get short SHA
         id: sha
