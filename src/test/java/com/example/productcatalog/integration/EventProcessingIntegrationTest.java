@@ -20,6 +20,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,29 +31,33 @@ import static org.mockito.Mockito.verify;
 
 /**
  * Verifies the full event-processing pipeline:
- * API → Command Handler → Outbox → OutboxPoller → Kafka → EventConsumer → Couchbase projection.
+ * API → Command Handler → Outbox → OutboxPoller → Kafka → EventConsumer →
+ * Couchbase projection.
  *
  * Kafka runs via @EmbeddedKafka. Couchbase is mocked — we verify the consumer
  * called projectionRepository.save() with the correct data.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
-@EmbeddedKafka(
-    partitions = 1,
-    topics = {"product.added", "product.updated", "product.stock.changed", "inventory.sync"}
-)
+@EmbeddedKafka(partitions = 1, topics = { "product.added", "product.updated", "product.stock.changed",
+        "inventory.sync" })
 @DisplayName("Event Processing — Integration Tests")
 class EventProcessingIntegrationTest {
 
-    @Autowired TestRestTemplate  restTemplate;
-    @Autowired ProductRepository commandRepository;
-    @Autowired OutboxRepository  outboxRepository;
+    @Autowired
+    TestRestTemplate restTemplate;
+    @Autowired
+    ProductRepository commandRepository;
+    @Autowired
+    OutboxRepository outboxRepository;
 
-    @MockBean ProductProjectionRepository projectionRepository;
+    @MockBean
+    ProductProjectionRepository projectionRepository;
 
     @DynamicPropertySource
     static void kafkaProperties(DynamicPropertyRegistry registry) {
-        // Overrides application-test.yml bootstrap-servers with the embedded broker address
+        // Overrides application-test.yml bootstrap-servers with the embedded broker
+        // address
         registry.add("spring.kafka.bootstrap-servers",
                 () -> System.getProperty("spring.embedded.kafka.brokers", "localhost:9092"));
     }
@@ -74,15 +79,16 @@ class EventProcessingIntegrationTest {
         var createResp = restTemplate.postForEntity("/api/v1/products", request, Void.class);
         assertThat(createResp.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 
-        // Wait for OutboxPoller → Kafka → ProductEventConsumer → projectionRepository.save()
-        await().atMost(15, TimeUnit.SECONDS)
-               .pollInterval(500, TimeUnit.MILLISECONDS)
-               .untilAsserted(() -> {
-                   ArgumentCaptor<ProductProjection> captor =
-                           ArgumentCaptor.forClass(ProductProjection.class);
-                   verify(projectionRepository, atLeastOnce()).save(captor.capture());
-                   assertThat(captor.getValue().getName()).isEqualTo("Event Test Laptop");
-               });
+        // Wait for OutboxPoller → Kafka → ProductEventConsumer →
+        // projectionRepository.save()
+        await().atMost(Duration.ofSeconds(15))
+                .pollDelay(Duration.ofMillis(100))
+                .pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() -> {
+                    ArgumentCaptor<ProductProjection> captor = ArgumentCaptor.forClass(ProductProjection.class);
+                    verify(projectionRepository, atLeastOnce()).save(captor.capture());
+                    assertThat(captor.getValue().getName()).isEqualTo("Event Test Laptop");
+                });
     }
 
     @Test
@@ -92,9 +98,9 @@ class EventProcessingIntegrationTest {
                 ProductRequest.builder().name("Outbox Test").price(new BigDecimal("50.00")).build(),
                 Void.class);
 
-        await().atMost(10, TimeUnit.SECONDS)
-               .pollInterval(500, TimeUnit.MILLISECONDS)
-               .untilAsserted(() ->
-                       assertThat(outboxRepository.findByPublishedFalseOrderByCreatedAtAsc()).isEmpty());
+        await().atMost(Duration.ofSeconds(10))
+                .pollDelay(Duration.ofMillis(100))
+                .pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() -> assertThat(outboxRepository.findByPublishedFalseOrderByCreatedAtAsc()).isEmpty());
     }
 }

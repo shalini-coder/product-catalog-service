@@ -42,19 +42,23 @@ import static org.springframework.http.HttpStatus.*;
 @ActiveProfiles("test")
 public class ProductApiStepDefinitions {
 
-    @Autowired private TestRestTemplate  restTemplate;
-    @Autowired private ProductRepository commandRepository;
+    @Autowired
+    private TestRestTemplate restTemplate;
+    @Autowired
+    private ProductRepository commandRepository;
 
-    @MockBean private ProductProjectionRepository queryRepository;
-    @MockBean private KafkaTemplate<String, String> kafkaTemplate;
+    @MockBean
+    private ProductProjectionRepository queryRepository;
+    @MockBean
+    private KafkaTemplate<String, String> kafkaTemplate;
 
     // ── In-memory projection store (backs the mock) ───────────────────────────
     private final Map<String, ProductProjection> projections = new LinkedHashMap<>();
 
     // ── Shared scenario state ─────────────────────────────────────────────────
     private ResponseEntity<?> lastResponse;
-    private String            lastProductId;
-    private Map<String, Object> productData  = new HashMap<>();
+    private String lastProductId;
+    private Map<String, Object> productData = new HashMap<>();
     private List<ProductResponse> searchResults = new ArrayList<>();
 
     // ── Before each scenario ──────────────────────────────────────────────────
@@ -62,9 +66,9 @@ public class ProductApiStepDefinitions {
     @Before
     public void resetState() {
         projections.clear();
-        lastResponse  = null;
+        lastResponse = null;
         lastProductId = null;
-        productData   = new HashMap<>();
+        productData = new HashMap<>();
         searchResults = new ArrayList<>();
 
         commandRepository.deleteAll();
@@ -97,22 +101,22 @@ public class ProductApiStepDefinitions {
     @Given("I have valid product details:")
     public void iHaveValidProductDetails(DataTable dataTable) {
         Map<String, String> data = dataTable.asMap(String.class, String.class);
-        productData.put("name",        data.getOrDefault("Name", "Test Product"));
+        productData.put("name", data.getOrDefault("Name", "Test Product"));
         productData.put("description", data.getOrDefault("Description", ""));
-        productData.put("price",       new BigDecimal(data.getOrDefault("Price", "9.99")));
+        productData.put("price", new BigDecimal(data.getOrDefault("Price", "9.99")));
     }
 
     @Given("I have product details with an empty name:")
     public void iHaveProductDetailsWithEmptyName(DataTable dataTable) {
         Map<String, String> data = dataTable.asMap(String.class, String.class);
-        productData.put("name",  "");
+        productData.put("name", "");
         productData.put("price", new BigDecimal(data.get("Price")));
     }
 
     @Given("I have product details with price {}")
     public void iHaveProductDetailsWithPrice(String price) {
-        productData.put("name",  "Test Product");
-        productData.put("price", "null".equals(price) ? null : new BigDecimal(price));
+        productData.put("name", "Test Product");
+        productData.put("price", price == null || "null".equalsIgnoreCase(price) ? null : new BigDecimal(price));
     }
 
     // ── Commands ──────────────────────────────────────────────────────────────
@@ -120,17 +124,20 @@ public class ProductApiStepDefinitions {
     @When("I send a POST request to create the product")
     public void iSendPostRequestToCreateProduct() {
         ProductRequest req = ProductRequest.builder()
-                .name((String)       productData.get("name"))
+                .name((String) productData.get("name"))
                 .description((String) productData.getOrDefault("description", ""))
-                .price((BigDecimal)  productData.get("price"))
+                .price((BigDecimal) productData.get("price"))
                 .build();
 
         lastResponse = restTemplate.postForEntity("/api/v1/products", req, Void.class);
 
-        // Extract ID from Location header (controller returns 201 with Location, no body)
+        // Extract ID from Location header (controller returns 201 with Location, no
+        // body)
         if (lastResponse.getStatusCode() == CREATED && lastResponse.getHeaders().getLocation() != null) {
-            String location = lastResponse.getHeaders().getLocation().toString();
-            lastProductId = location.substring(location.lastIndexOf('/') + 1);
+            var locationUri = lastResponse.getHeaders().getLocation();
+            String path = locationUri.getPath();
+            lastProductId = path.substring(path.lastIndexOf('/') + 1);
+            assertThat(lastProductId).as("Product ID not found in Location header").isNotBlank();
         }
     }
 
@@ -252,9 +259,8 @@ public class ProductApiStepDefinitions {
         assertThat(lastProductId).isNotBlank();
         // Awaitility waits for the mock to be called by the async event consumer
         await().atMost(5, TimeUnit.SECONDS)
-               .pollInterval(200, TimeUnit.MILLISECONDS)
-               .untilAsserted(() ->
-                       assertThat(queryRepository.findById(lastProductId)).isPresent());
+                .pollInterval(200, TimeUnit.MILLISECONDS)
+                .untilAsserted(() -> assertThat(queryRepository.findById(lastProductId)).isPresent());
     }
 
     // ── Test data helpers ─────────────────────────────────────────────────────

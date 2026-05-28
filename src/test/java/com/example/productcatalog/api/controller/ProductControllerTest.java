@@ -2,6 +2,7 @@ package com.example.productcatalog.api.controller;
 
 import com.example.productcatalog.api.dto.ProductRequest;
 import com.example.productcatalog.command.handler.ProductCommandHandler;
+import com.example.productcatalog.command.model.AddProductCommand;
 import com.example.productcatalog.query.dto.ProductDto;
 import com.example.productcatalog.query.handler.ProductQueryHandler;
 import com.example.productcatalog.query.model.GetProductQuery;
@@ -28,85 +29,89 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("ProductController")
 class ProductControllerTest {
 
-    @Autowired MockMvc     mockMvc;
-    @Autowired ObjectMapper mapper;
+        @Autowired
+        MockMvc mockMvc;
+        @Autowired
+        ObjectMapper mapper;
 
-    @MockBean ProductCommandHandler commandHandler;
-    @MockBean ProductQueryHandler   queryHandler;
+        @MockBean
+        ProductCommandHandler commandHandler;
+        @MockBean
+        ProductQueryHandler queryHandler;
 
-    // ── POST /api/v1/products ─────────────────────────────────────────────────
+        // ── POST /api/v1/products ─────────────────────────────────────────────────
 
-    @Test
-    @WithMockUser(roles = "ADMIN")
-    @DisplayName("POST /products should return 201 and Location header when valid")
-    void createProduct_shouldReturn201() throws Exception {
-        UUID newId = UUID.randomUUID();
-        when(commandHandler.handle(any())).thenReturn(newId);
+        @Test
+        @WithMockUser(roles = "ADMIN")
+        @DisplayName("POST /products should return 201 and Location header when valid")
+        void createProduct_shouldReturn201() throws Exception {
+                UUID newId = UUID.randomUUID();
+                when(commandHandler.handle(any(AddProductCommand.class))).thenReturn(newId);
 
-        ProductRequest request = ProductRequest.builder()
-                .name("Gaming Laptop")
-                .description("High-performance")
-                .price(new BigDecimal("1299.99"))
-                .build();
+                ProductRequest request = ProductRequest.builder()
+                                .name("Gaming Laptop")
+                                .description("High-performance")
+                                .price(new BigDecimal("1299.99"))
+                                .build();
 
-        mockMvc.perform(post("/api/v1/products")
-                        .with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(mapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andExpect(header().string("Location", "/api/v1/products/" + newId));
-    }
+                mockMvc.perform(post("/api/v1/products")
+                                .with(csrf())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(mapper.writeValueAsString(request)))
+                                .andExpect(status().isCreated())
+                                .andExpect(header().string("Location", "/api/v1/products/" + newId));
+        }
 
-    @Test
-    @WithMockUser(roles = "ADMIN")
-    @DisplayName("POST /products should return 400 when name is blank")
-    void createProduct_shouldReturn400WhenNameBlank() throws Exception {
-        ProductRequest request = ProductRequest.builder()
-                .name("  ")
-                .price(new BigDecimal("10.00"))
-                .build();
+        @Test
+        @WithMockUser(roles = "ADMIN")
+        @DisplayName("POST /products should return 400 when name is blank")
+        void createProduct_shouldReturn400WhenNameBlank() throws Exception {
+                ProductRequest request = ProductRequest.builder()
+                                .name("  ")
+                                .price(new BigDecimal("10.00"))
+                                .build();
 
-        mockMvc.perform(post("/api/v1/products")
-                        .with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(mapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest());
-    }
+                mockMvc.perform(post("/api/v1/products")
+                                .with(csrf())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(mapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest());
+        }
 
-    @Test
-    @DisplayName("POST /products should return 401 when unauthenticated")
-    void createProduct_shouldReturn401WhenUnauthenticated() throws Exception {
-        ProductRequest request = ProductRequest.builder()
-                .name("Laptop")
-                .price(new BigDecimal("999.00"))
-                .build();
+        @Test
+        @DisplayName("POST /products should return 401 when unauthenticated")
+        void createProduct_shouldReturn401WhenUnauthenticated() throws Exception {
+                ProductRequest request = ProductRequest.builder()
+                                .name("Laptop")
+                                .price(new BigDecimal("999.00"))
+                                .build();
 
-        mockMvc.perform(post("/api/v1/products")
-                        .with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(mapper.writeValueAsString(request)))
-                .andExpect(status().isUnauthorized());
-    }
+                mockMvc.perform(post("/api/v1/products")
+                                .with(csrf())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(mapper.writeValueAsString(request)))
+                                .andExpect(status().isUnauthorized());
+        }
 
-    // ── GET /api/v1/products/{id} ─────────────────────────────────────────────
+        // ── GET /api/v1/products/{id} ─────────────────────────────────────────────
 
-    @Test
-    @DisplayName("GET /products/{id} should return 200 with product JSON")
-    void getProduct_shouldReturn200() throws Exception {
-        UUID id = UUID.randomUUID();
-        ProductDto dto = ProductDto.builder()
-                .id(id.toString())
-                .name("Gaming Laptop")
-                .price(new BigDecimal("1299.99"))
-                .stockQuantity(5)
-                .inStock(true)
-                .build();
+        @Test
+        @DisplayName("GET /products/{id} should return 200 with product JSON")
+        void getProduct_shouldReturn200() throws Exception {
+                UUID id = UUID.randomUUID();
+                ProductDto dto = ProductDto.builder()
+                                .id(id.toString())
+                                .name("Gaming Laptop")
+                                .price(new BigDecimal("1299.99"))
+                                .stockQuantity(5)
+                                .inStock(true)
+                                .build();
 
-        when(queryHandler.handle(any(GetProductQuery.class))).thenReturn(dto);
+                when(queryHandler.handle(any(GetProductQuery.class))).thenReturn(dto);
 
-        mockMvc.perform(get("/api/v1/products/" + id))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.name").value("Gaming Laptop"))
-                .andExpect(jsonPath("$.inStock").value(true));
-    }
+                mockMvc.perform(get("/api/v1/products/" + id))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.name").value("Gaming Laptop"))
+                                .andExpect(jsonPath("$.inStock").value(true));
+        }
 }
