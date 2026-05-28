@@ -50,11 +50,14 @@ services:
     depends_on:
       - zookeeper
     ports:
-      - "9092:9092"
+      - "29092:29092"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
     healthcheck:
@@ -62,6 +65,40 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+
+  # ── Couchbase initializer (runs once, exits) ────────────────────────────────
+  couchbase-init:
+    image: curlimages/curl:8.5.0
+    depends_on:
+      couchbase:
+        condition: service_healthy
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        echo "Initializing Couchbase cluster..."
+        curl -sf http://couchbase:8091/pools > /dev/null || (echo "Couchbase not ready" && exit 1)
+
+        curl -sf -X POST http://couchbase:8091/node/controller/rename \
+          -d hostname=127.0.0.1
+
+        curl -sf -X POST http://couchbase:8091/node/controller/setupServices \
+          -d services=kv,n1ql,index
+
+        curl -sf -X POST http://couchbase:8091/settings/web \
+          -d username=Administrator -d password=password -d port=SAME
+
+        curl -sf -X POST http://couchbase:8091/pools/default \
+          -u Administrator:password \
+          -d memoryQuota=512 -d indexMemoryQuota=256
+
+        curl -sf -X POST http://couchbase:8091/pools/default/buckets \
+          -u Administrator:password \
+          -d name=product-catalog -d bucketType=couchbase \
+          -d ramQuotaMB=256 -d replicaNumber=0 -d authType=none
+
+        echo "Couchbase initialized."
 
   # ── Application ─────────────────────────────────────────────────────────────
   product-catalog-service:
@@ -73,6 +110,8 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      couchbase-init:
+        condition: service_completed_successfully
     ports:
       - "8080:8080"
     environment:
