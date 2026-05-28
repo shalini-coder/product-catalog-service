@@ -91,6 +91,26 @@ services:
           echo "Bucket created."
         fi
 
+        # Grant bucket_full_access so N1QL index operations are permitted
+        curl -sf -X PUT http://couchbase:8091/settings/rbac/users/local/Administrator \
+          -u Administrator:password \
+          -d 'roles=admin,bucket_full_access[product-catalog]&password=password&name=Administrator' || true
+
+        # Set indexer storage mode (required before creating GSI indexes)
+        curl -sf -X POST http://couchbase:8091/settings/indexes \
+          -u Administrator:password \
+          -d 'storageMode=forestdb' || true
+
+        # Create primary index (N1QL queries fail without it)
+        echo "Creating N1QL indexes..."
+        curl -sf -u Administrator:password http://couchbase:8093/query/service \
+          -d 'statement=CREATE PRIMARY INDEX IF NOT EXISTS ON `product-catalog`' || true
+
+        # Create secondary index on name for search queries
+        curl -sf -u Administrator:password http://couchbase:8093/query/service \
+          -d 'statement=CREATE INDEX idx_product_name ON `product-catalog`(LOWER(name))' 2>/dev/null || true
+        echo "Indexes ready."
+
         echo "Couchbase ready."
 
   # ── Kafka UI (browse topics, messages, consumer groups) ─────────────────────

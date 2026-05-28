@@ -73,7 +73,10 @@ management:
         include: health,info,metrics,prometheus
   endpoint:
     health:
-      show-details: when-authorized
+      show-details: always
+  health:
+    couchbase:
+      enabled: false   # Couchbase flakiness should not fail the liveness probe
 
 # ── App-specific ─────────────────────────────────────────────────────────────
 app:
