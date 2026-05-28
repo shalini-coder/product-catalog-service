@@ -17,7 +17,7 @@ set -euo pipefail
 
 # ── Config — change these if you want ────────────────────────────────────────
 RESOURCE_GROUP="rg-product-catalog-poc"
-ACR_NAME="acrproductcatalogpoc$RANDOM"   # random suffix avoids name collisions
+ACR_NAME="acrproductcatalogpoc"          # fixed name — idempotent across retries
 ACA_ENV="aca-env-poc"
 IMAGE_NAME="product-catalog-service"
 IMAGE_TAG="poc-$(git rev-parse --short HEAD 2>/dev/null || echo latest)"
@@ -50,27 +50,63 @@ echo "    Using existing resource group in: $LOCATION"
 
 # ── 1b. Register required resource providers ──────────────────────────────────
 echo ">>> [1b/6] Registering required Azure resource providers..."
-for PROVIDER in Microsoft.ContainerRegistry Microsoft.App Microsoft.OperationalInsights; do
+
+register_provider() {
+    local PROVIDER="$1"
+    local STATE
     STATE=$(az provider show --namespace "$PROVIDER" --query "registrationState" --output tsv 2>/dev/null || echo "NotFound")
-    if [ "$STATE" != "Registered" ]; then
-        echo "    Registering $PROVIDER ..."
-        az provider register --namespace "$PROVIDER" --wait
-        echo "    $PROVIDER registered."
-    else
+
+    if [ "$STATE" = "Registered" ]; then
         echo "    $PROVIDER already registered."
+        return 0
     fi
+
+    echo "    Registering $PROVIDER (this may take ~2 min)..."
+    az provider register --namespace "$PROVIDER" 2>/dev/null || true
+
+    # Poll until Registered or timeout (90 × 10s = 15 min max)
+    local RETRIES=90
+    for i in $(seq 1 $RETRIES); do
+        STATE=$(az provider show --namespace "$PROVIDER" --query "registrationState" --output tsv 2>/dev/null || echo "Unknown")
+        if [ "$STATE" = "Registered" ]; then
+            echo "    $PROVIDER registered."
+            return 0
+        fi
+        echo "    [$i/$RETRIES] $PROVIDER state: $STATE — waiting 10s..."
+        sleep 10
+    done
+
+    echo ""
+    echo "ERROR: $PROVIDER did not reach 'Registered' state after waiting."
+    echo "       You may lack permission to register providers on this subscription."
+    echo "       Ask your subscription Owner/Admin to run:"
+    echo "         az provider register --namespace $PROVIDER"
+    echo "       Then re-run this script."
+    exit 1
+}
+
+for PROVIDER in Microsoft.ContainerRegistry Microsoft.App Microsoft.OperationalInsights; do
+    register_provider "$PROVIDER"
 done
 
-# ── 2. Create Azure Container Registry ───────────────────────────────────────
-echo ">>> [2/6] Creating container registry: $ACR_NAME"
-az acr create \
-    --resource-group "$RESOURCE_GROUP" \
-    --name           "$ACR_NAME" \
-    --sku            Basic \
-    --admin-enabled  true \
-    --tags           $TAGS Component=registry \
-    --output         none
-echo "    Done."
+# ── 2. Create Azure Container Registry (idempotent) ──────────────────────────
+echo ">>> [2/6] Checking container registry: $ACR_NAME"
+ACR_EXISTS=$(az acr show --name "$ACR_NAME" --resource-group "$RESOURCE_GROUP" \
+    --query "name" --output tsv 2>/dev/null || true)
+
+if [ -n "$ACR_EXISTS" ]; then
+    echo "    Registry already exists, reusing it."
+else
+    echo "    Creating registry..."
+    az acr create \
+        --resource-group "$RESOURCE_GROUP" \
+        --name           "$ACR_NAME" \
+        --sku            Basic \
+        --admin-enabled  true \
+        --tags           $TAGS Component=registry \
+        --output         none
+    echo "    Done."
+fi
 
 ACR_SERVER="${ACR_NAME}.azurecr.io"
 FULL_IMAGE="${ACR_SERVER}/${IMAGE_NAME}:${IMAGE_TAG}"
