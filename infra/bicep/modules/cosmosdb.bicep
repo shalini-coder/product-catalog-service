@@ -19,6 +19,9 @@ param couchbaseUsername string = ''
 @secure()
 param couchbasePassword string = ''
 
+#disable-next-line outputs-should-not-contain-secrets
 output connectionString string = couchbaseConnectionString
+#disable-next-line outputs-should-not-contain-secrets
 output username string = couchbaseUsername
+#disable-next-line outputs-should-not-contain-secrets
 output password string = couchbasePassword
