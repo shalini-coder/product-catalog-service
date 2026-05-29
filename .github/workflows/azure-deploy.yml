@@ -14,7 +14,7 @@ on:
       deployment_mode:
         description: 'Deployment mode'
         required: true
-        default: 'docker-only'
+        default: 'managed-services'
         type: choice
         options: [docker-only, managed-services]
 
