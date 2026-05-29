@@ -6,7 +6,7 @@ using '../main.bicep'
 
 param deploymentMode       = 'docker-only'
 param environment          = 'dev'
-param location             = 'centralindia'
+param location             = 'eastus'
 param appName              = 'product-catalog'
 param existingAcrName      = ''
 param postgresAdminLogin   = 'catalogadmin'

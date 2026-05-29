@@ -11,7 +11,7 @@ This guide provides **step-by-step instructions** to manually create Azure manag
 | **Key Vault** | `kv-product-catalog-dev` | N/A | N/A |
 | **Couchbase Capella** | Your choice | Your choice | `<YOUR_PASSWORD>` |
 | **Resource Group** | `rg-product-catalog-poc` | N/A | N/A |
-| **Region** | `centralindia` | N/A | N/A |
+| **Region** | `eastus` | N/A | N/A |
 | **Environment** | `dev` | N/A | N/A |
 
 ---
@@ -28,7 +28,7 @@ This guide provides **step-by-step instructions** to manually create Azure manag
      - Subscription: Your subscription
      - Resource group: `rg-product-catalog-poc`
      - Server name: `psql-product-catalog-dev`
-     - Region: **Central India** (centralindia)
+     - Region: **Central India** (eastus)
      - PostgreSQL version: **16**
      - Admin username: `catalogadmin`
      - Admin password: **<choose a strong password, e.g., `Postgres@Dev2024!`>**
@@ -49,7 +49,7 @@ POSTGRES_PASSWORD="Postgres@Dev2024!"
 az postgres flexible-server create \
   --resource-group rg-product-catalog-poc \
   --name psql-product-catalog-dev \
-  --location centralindia \
+  --location eastus \
   --admin-user catalogadmin \
   --admin-password "$POSTGRES_PASSWORD" \
   --sku-name Standard_B1ms \
@@ -111,7 +111,7 @@ echo "SPRING_DATASOURCE_PASSWORD=Postgres@Dev2024!"
 az eventhubs namespace create \
   --resource-group rg-product-catalog-poc \
   --name evhns-product-catalog-dev \
-  --location centralindia \
+  --location eastus \
   --sku Standard \
   --capacity 1 \
   --enable-kafka true
@@ -259,7 +259,7 @@ echo "$EVENTHUB_CONNECTION_STRING"
 az keyvault create \
   --resource-group rg-product-catalog-poc \
   --name kv-product-catalog-dev \
-  --location centralindia \
+  --location eastus \
   --enable-rbac-authorization false
 ```
 
@@ -333,7 +333,7 @@ AZURE_KEYVAULT_ENDPOINT=https://kv-product-catalog-dev.vault.azure.net/
 
 # Resource Info
 AZURE_RESOURCE_GROUP=rg-product-catalog-poc
-AZURE_REGION=centralindia
+AZURE_REGION=eastus
 ```
 
 ---
