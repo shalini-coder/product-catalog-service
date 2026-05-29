@@ -9,15 +9,10 @@
         </encoder>
     </appender>
 
-    <!-- Production: structured JSON (activate with spring.profiles.active=prod) -->
+    <!-- Production: simple logging (activate with spring.profiles.active=prod) -->
     <springProfile name="prod">
-        <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
-            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
-                <includeMdcKeyName>correlationId</includeMdcKeyName>
-            </encoder>
-        </appender>
         <root level="WARN">
-            <appender-ref ref="JSON"/>
+            <appender-ref ref="STDOUT"/>
         </root>
     </springProfile>
 
