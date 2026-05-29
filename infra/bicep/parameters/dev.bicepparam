@@ -4,7 +4,7 @@ using '../main.bicep'
 // NOTE: Use 'docker-only' to keep costs minimal in dev.
 // Switch to 'managed-services' for staging/prod.
 
-param deploymentMode       = 'managed-services'
+param deploymentMode       = 'docker-only'
 param environment          = 'dev'
 param location             = 'eastus'
 param appName              = 'product-catalog'
