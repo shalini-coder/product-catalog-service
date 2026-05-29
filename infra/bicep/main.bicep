@@ -264,7 +264,7 @@ resource kafkaApp 'Microsoft.App/containerApps@2023-05-01' = if (deploymentMode 
       containers: [
         {
           name: 'kafka'
-          image: 'confluentinc/cp-kafka:6.2.0'
+          image: 'confluentinc/cp-kafka:7.5.1'
           resources: {
             cpu: json('1')
             memory: '2Gi'
@@ -280,15 +280,15 @@ resource kafkaApp 'Microsoft.App/containerApps@2023-05-01' = if (deploymentMode 
             }
             {
               name: 'KAFKA_LISTENERS'
-              value: 'PLAINTEXT://0.0.0.0:9092'
+              value: 'PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092'
             }
             {
               name: 'KAFKA_ADVERTISED_LISTENERS'
-              value: 'PLAINTEXT://ca-kafka-${suffix}:9092'
+              value: 'PLAINTEXT://ca-kafka-${suffix}:9092,PLAINTEXT_HOST://ca-kafka-${suffix}:29092'
             }
             {
               name: 'KAFKA_LISTENER_SECURITY_PROTOCOL_MAP'
-              value: 'PLAINTEXT:PLAINTEXT'
+              value: 'PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
             }
             {
               name: 'KAFKA_INTER_BROKER_LISTENER_NAME'
