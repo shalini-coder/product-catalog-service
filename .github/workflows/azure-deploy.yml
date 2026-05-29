@@ -167,8 +167,8 @@ jobs:
               --set-env-vars \
                 SPRING_PROFILES_ACTIVE=prod \
                 SPRING_DATASOURCE_URL="jdbc:postgresql://${POSTGRES_HOST}:5432/product_catalog" \
-                SPRING_DATASOURCE_USERNAME=catalogadmin \
-                SPRING_DATASOURCE_PASSWORD="$POSTGRES_PASSWORD" \
+                SPRING_DATASOURCE_USERNAME=postgres \
+                SPRING_DATASOURCE_PASSWORD=postgres \
                 SPRING_COUCHBASE_CONNECTION_STRING="couchbase://${COUCHBASE_HOST}" \
                 SPRING_COUCHBASE_USERNAME=catalogadmin \
                 SPRING_COUCHBASE_PASSWORD="$COUCHBASE_PASSWORD" \
