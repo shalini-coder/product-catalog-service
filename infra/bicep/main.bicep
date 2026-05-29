@@ -217,7 +217,6 @@ resource kafkaApp 'Microsoft.App/containerApps@2023-05-01' = if (deploymentMode 
       ingress: {
         external: false
         targetPort: 9092
-        exposedPort: 9092
       }
     }
     template: {
