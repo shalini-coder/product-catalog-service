@@ -17,7 +17,10 @@ param postgresAdminLogin   = 'catalogadmin'
 //   az deployment group create \
 //     --template-file infra/bicep/main.bicep \
 //     --parameters infra/bicep/parameters/dev.bicepparam \
-//     --parameters jwtSecret=$JWT_SECRET
+//     --parameters jwtSecret=$JWT_SECRET \
+//     --parameters couchbaseConnectionString=$COUCHBASE_CONNECTION_STRING
 param jwtSecret            = ''    // override at deploy time
 param postgresAdminPassword = ''   // override at deploy time
 param couchbasePassword    = ''    // override at deploy time
+param couchbaseConnectionString = ''  // Couchbase Capella connection string (managed-services only)
+param couchbaseUsername = ''  // Couchbase Capella username (managed-services only)

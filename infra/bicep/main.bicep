@@ -53,6 +53,12 @@ param jwtSecret string
 @description('Couchbase password (Capella or local)')
 param couchbasePassword string = ''
 
+@description('Couchbase Capella connection string (managed-services only)')
+param couchbaseConnectionString string = ''
+
+@description('Couchbase Capella username (managed-services only)')
+param couchbaseUsername string = ''
+
 // ── Variables ─────────────────────────────────────────────────────────────────
 
 var suffix        = '${appName}-${environment}'
@@ -293,6 +299,16 @@ module eventHub 'modules/eventhub.bicep' = if (deploymentMode == 'managed-servic
   }
 }
 
+// Couchbase Capella (placeholder for manual setup)
+module couchbase 'modules/cosmosdb.bicep' = if (deploymentMode == 'managed-services') {
+  name: 'deploy-couchbase'
+  params: {
+    couchbaseConnectionString: couchbaseConnectionString
+    couchbaseUsername: couchbaseUsername
+    couchbasePassword: couchbasePassword
+  }
+}
+
 // Azure Key Vault
 module keyVault 'modules/keyvault.bicep' = if (deploymentMode == 'managed-services') {
   name: 'deploy-keyvault'
@@ -302,6 +318,8 @@ module keyVault 'modules/keyvault.bicep' = if (deploymentMode == 'managed-servic
     jwtSecret: jwtSecret
     postgresPassword: postgresAdminPassword
     couchbasePassword: couchbasePassword
+    couchbaseConnectionString: couchbaseConnectionString
+    couchbaseUsername: couchbaseUsername
   }
 }
 
