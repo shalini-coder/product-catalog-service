@@ -130,7 +130,7 @@ jobs:
   # ── 4. Update Container App image ────────────────────────────────────────────
   deploy-app:
     name: Deploy Application
-    needs: [push-to-acr, deploy-infra]
+    needs: [build, push-to-acr, deploy-infra]
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.environment || 'dev' }}
 
