@@ -153,6 +153,10 @@ jobs:
           COUCHBASE_HOST="ca-couchbase-product-catalog-${ENV}"
           KAFKA_HOST="ca-kafka-product-catalog-${ENV}"
 
+          # Get secrets
+          POSTGRES_PASSWORD="${{ secrets.POSTGRES_ADMIN_PASSWORD }}"
+          COUCHBASE_PASSWORD="${{ secrets.COUCHBASE_PASSWORD }}"
+
           # Simply try update; if fails (doesn't exist), will be caught and noted
           if az containerapp show --name "$APP_NAME" --resource-group "$RG" &>/dev/null; then
             echo "Updating existing Container App..."
@@ -163,9 +167,11 @@ jobs:
               --set-env-vars \
                 SPRING_PROFILES_ACTIVE=prod \
                 SPRING_DATASOURCE_URL="jdbc:postgresql://${POSTGRES_HOST}:5432/product_catalog" \
-                SPRING_DATASOURCE_USERNAME=postgres \
-                SPRING_DATASOURCE_PASSWORD=postgres \
+                SPRING_DATASOURCE_USERNAME=catalogadmin \
+                SPRING_DATASOURCE_PASSWORD="$POSTGRES_PASSWORD" \
                 SPRING_COUCHBASE_CONNECTION_STRING="couchbase://${COUCHBASE_HOST}" \
+                SPRING_COUCHBASE_USERNAME=catalogadmin \
+                SPRING_COUCHBASE_PASSWORD="$COUCHBASE_PASSWORD" \
                 SPRING_KAFKA_BOOTSTRAP_SERVERS="${KAFKA_HOST}:9092"
           else
             echo "Creating new Container App..."
