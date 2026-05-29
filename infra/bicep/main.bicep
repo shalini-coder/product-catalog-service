@@ -113,6 +113,164 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   }
 }
 
+// ── DOCKER-ONLY mode resources (container apps for Postgres, Couchbase, Kafka) ──
+
+// PostgreSQL container app
+resource postgresApp 'Microsoft.App/containerApps@2023-05-01' = if (deploymentMode == 'docker-only') {
+  name: 'ca-postgres-${suffix}'
+  location: location
+  properties: {
+    managedEnvironmentId: acaEnv.id
+    configuration: {
+      ingress: {
+        external: false
+        targetPort: 5432
+      }
+    }
+    template: {
+      containers: [
+        {
+          name: 'postgres'
+          image: 'postgres:16-alpine'
+          resources: {
+            cpu: json('0.5')
+            memory: '1Gi'
+          }
+          env: [
+            {
+              name: 'POSTGRES_USER'
+              value: 'postgres'
+            }
+            {
+              name: 'POSTGRES_PASSWORD'
+              value: 'postgres'
+            }
+            {
+              name: 'POSTGRES_DB'
+              value: 'product_catalog'
+            }
+          ]
+        }
+      ]
+      scale: {
+        minReplicas: 1
+        maxReplicas: 1
+      }
+    }
+  }
+}
+
+// Couchbase container app
+resource couchbaseApp 'Microsoft.App/containerApps@2023-05-01' = if (deploymentMode == 'docker-only') {
+  name: 'ca-couchbase-${suffix}'
+  location: location
+  properties: {
+    managedEnvironmentId: acaEnv.id
+    configuration: {
+      ingress: {
+        external: false
+        targetPort: 8091
+      }
+    }
+    template: {
+      containers: [
+        {
+          name: 'couchbase'
+          image: 'couchbase/server:7.2.3'
+          resources: {
+            cpu: json('1')
+            memory: '2Gi'
+          }
+          env: [
+            {
+              name: 'COUCHBASE_ADMIN_USER'
+              value: 'Administrator'
+            }
+            {
+              name: 'COUCHBASE_ADMIN_PASSWORD'
+              value: 'password'
+            }
+          ]
+        }
+      ]
+      scale: {
+        minReplicas: 1
+        maxReplicas: 1
+      }
+    }
+  }
+}
+
+// Kafka container app
+resource kafkaApp 'Microsoft.App/containerApps@2023-05-01' = if (deploymentMode == 'docker-only') {
+  name: 'ca-kafka-${suffix}'
+  location: location
+  properties: {
+    managedEnvironmentId: acaEnv.id
+    configuration: {
+      ingress: {
+        external: false
+        targetPort: 9092
+        exposedPort: 9092
+      }
+    }
+    template: {
+      containers: [
+        {
+          name: 'kafka'
+          image: 'apache/kafka:latest'
+          resources: {
+            cpu: json('1')
+            memory: '2Gi'
+          }
+          env: [
+            {
+              name: 'KAFKA_NODE_ID'
+              value: '1'
+            }
+            {
+              name: 'KAFKA_PROCESS_ROLES'
+              value: 'broker,controller'
+            }
+            {
+              name: 'KAFKA_LISTENER_SECURITY_PROTOCOL_MAP'
+              value: 'PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT'
+            }
+            {
+              name: 'KAFKA_ADVERTISED_LISTENERS'
+              value: 'PLAINTEXT://ca-kafka-${suffix}:9092'
+            }
+            {
+              name: 'KAFKA_CONTROLLER_LISTENER_NAMES'
+              value: 'CONTROLLER'
+            }
+            {
+              name: 'KAFKA_CONTROLLER_QUORUM_VOTERS'
+              value: '1@ca-kafka-${suffix}:9093'
+            }
+            {
+              name: 'KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR'
+              value: '1'
+            }
+            {
+              name: 'KAFKA_OFFSETS_TOPIC_MIN_ISR'
+              value: '1'
+            }
+            {
+              name: 'KAFKA_LOG_DIRS'
+              value: '/tmp/kraft-combined-logs'
+            }
+          ]
+        }
+      ]
+      scale: {
+        minReplicas: 1
+        maxReplicas: 1
+      }
+    }
+  }
+}
+
 // ── MANAGED SERVICES mode resources ──────────────────────────────────────────
 
 // Azure PostgreSQL Flexible Server
@@ -163,3 +321,6 @@ output appInsightsConnectionString string = appInsights.properties.ConnectionStr
 output resourceGroupName string = resourceGroup().name
 output deploymentMode string = deploymentMode
 output suffix string = suffix
+output postgresHost string = deploymentMode == 'docker-only' ? 'ca-postgres-${suffix}' : 'postgres'
+output couchbaseHost string = deploymentMode == 'docker-only' ? 'ca-couchbase-${suffix}' : 'couchbase'
+output kafkaHost string = deploymentMode == 'docker-only' ? 'ca-kafka-${suffix}' : 'kafka'

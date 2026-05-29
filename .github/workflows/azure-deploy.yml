@@ -148,13 +148,25 @@ jobs:
           APP_NAME="ca-product-catalog-${ENV}"
           RG=${{ secrets.AZURE_RESOURCE_GROUP }}
 
+          # Get database hostnames from Bicep outputs
+          POSTGRES_HOST="ca-postgres-product-catalog-${ENV}"
+          COUCHBASE_HOST="ca-couchbase-product-catalog-${ENV}"
+          KAFKA_HOST="ca-kafka-product-catalog-${ENV}"
+
           # Simply try update; if fails (doesn't exist), will be caught and noted
           if az containerapp show --name "$APP_NAME" --resource-group "$RG" &>/dev/null; then
             echo "Updating existing Container App..."
             az containerapp update \
               --name "$APP_NAME" \
               --resource-group "$RG" \
-              --image "${ACR_SERVER}/${{ env.IMAGE_NAME }}:${SHORT_SHA}"
+              --image "${ACR_SERVER}/${{ env.IMAGE_NAME }}:${SHORT_SHA}" \
+              --set-env-vars \
+                SPRING_PROFILES_ACTIVE="prod" \
+                SPRING_DATASOURCE_URL="jdbc:postgresql://${POSTGRES_HOST}:5432/product_catalog" \
+                SPRING_DATASOURCE_USERNAME="postgres" \
+                SPRING_DATASOURCE_PASSWORD="postgres" \
+                SPRING_DATA_COUCHBASE_CONNECTION_STRING="couchbase://${COUCHBASE_HOST}" \
+                SPRING_KAFKA_BOOTSTRAP_SERVERS="${KAFKA_HOST}:9092"
           else
             echo "Creating new Container App..."
             ENV_ID=$(az containerapp env show --name "acaenv-product-catalog-${ENV}" --resource-group "$RG" --query id -o tsv)
@@ -171,7 +183,14 @@ jobs:
               --cpu 0.5 \
               --memory 1Gi \
               --ingress external \
-              --target-port 8080
+              --target-port 8080 \
+              --set-env-vars \
+                SPRING_PROFILES_ACTIVE="prod" \
+                SPRING_DATASOURCE_URL="jdbc:postgresql://${POSTGRES_HOST}:5432/product_catalog" \
+                SPRING_DATASOURCE_USERNAME="postgres" \
+                SPRING_DATASOURCE_PASSWORD="postgres" \
+                SPRING_DATA_COUCHBASE_CONNECTION_STRING="couchbase://${COUCHBASE_HOST}" \
+                SPRING_KAFKA_BOOTSTRAP_SERVERS="${KAFKA_HOST}:9092"
           fi
 
       - name: Show app URL
