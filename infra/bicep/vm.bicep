@@ -3,7 +3,8 @@ targetScope = 'resourceGroup'
 param environment string = 'dev'
 param location string = resourceGroup().location
 param appName string = 'product-catalog'
-param vmSize string = 'Standard_B1s'
+param vmSize string = 'Standard_B2s'
+param vmAdminUsername string = 'azureuser'
 @secure()
 param vmAdminPassword string
 
@@ -114,7 +115,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2023-03-01' = {
     }
     osProfile: {
       computerName: vmName
-      adminUsername: 'azureuser'
+      adminUsername: vmAdminUsername
       adminPassword: vmAdminPassword
       linuxConfiguration: {
         disablePasswordAuthentication: false
