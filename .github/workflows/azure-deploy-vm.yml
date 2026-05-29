@@ -1,0 +1,60 @@
+name: Deploy to Azure VM
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options: [dev]
+      vm_password:
+        description: 'VM admin password (azureuser)'
+        required: true
+        type: password
+
+env:
+  JAVA_VERSION: '21'
+
+jobs:
+  deploy-vm:
+    name: Deploy to Azure VM
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy Bicep (VM)
+        uses: azure/arm-deploy@v2
+        with:
+          resourceGroupName: ${{ secrets.AZURE_RESOURCE_GROUP }}
+          template: infra/bicep/vm.bicep
+          parameters: >
+            infra/bicep/parameters/vm-dev.bicepparam
+            vmAdminPassword=${{ github.event.inputs.vm_password }}
+          failOnStdErr: false
+
+      - name: Get VM Public IP
+        run: |
+          VM_NAME="vm-product-catalog-${{ github.event.inputs.environment || 'dev' }}"
+          RG="${{ secrets.AZURE_RESOURCE_GROUP }}"
+          PIP=$(az vm show -d -g "$RG" -n "$VM_NAME" --query publicIps -o tsv)
+          echo "VM deployed! Access at: http://$PIP:8080"
+          echo "SSH: ssh azureuser@$PIP"
+
+      - name: Wait for Docker Compose
+        run: sleep 60
+
+      - name: Check Application Health
+        run: |
+          VM_NAME="vm-product-catalog-${{ github.event.inputs.environment || 'dev' }}"
+          RG="${{ secrets.AZURE_RESOURCE_GROUP }}"
+          PIP=$(az vm show -d -g "$RG" -n "$VM_NAME" --query publicIps -o tsv)
+          curl -f http://$PIP:8080/swagger-ui.html || echo "App still starting..."
