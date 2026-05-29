@@ -225,8 +225,8 @@ resource zookeeperApp 'Microsoft.App/containerApps@2023-05-01' = if (deploymentM
           name: 'zookeeper'
           image: 'confluentinc/cp-zookeeper:7.5.1'
           resources: {
-            cpu: json('0.5')
-            memory: '1Gi'
+            cpu: json('1')
+            memory: '2Gi'
           }
           env: [
             {
@@ -301,6 +301,14 @@ resource kafkaApp 'Microsoft.App/containerApps@2023-05-01' = if (deploymentMode 
             {
               name: 'KAFKA_AUTO_CREATE_TOPICS_ENABLE'
               value: 'true'
+            }
+            {
+              name: 'KAFKA_ZOOKEEPER_SESSION_TIMEOUT_MS'
+              value: '60000'
+            }
+            {
+              name: 'KAFKA_ZOOKEEPER_CONNECTION_TIMEOUT_MS'
+              value: '60000'
             }
           ]
         }
