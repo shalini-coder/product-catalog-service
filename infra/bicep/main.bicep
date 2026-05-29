@@ -147,31 +147,19 @@ module keyVault 'modules/keyvault.bicep' = if (deploymentMode == 'managed-servic
   }
 }
 
-// ── Container App (application) ───────────────────────────────────────────────
+// ── Variables ────────────────────────────────────────────────────────────────
 
 var acrLoginServer = empty(existingAcrName)
   ? newAcr!.properties.loginServer
   : existingAcr!.properties.loginServer
 
-module containerApp 'modules/container-app.bicep' = {
-  name: 'deploy-container-app'
-  params: {
-    suffix: suffix
-    location: location
-    acaEnvId: acaEnv.id
-    acrLoginServer: acrLoginServer
-    acrName: resolvedAcrName
-    deploymentMode: deploymentMode
-    jwtSecret: jwtSecret
-    appInsightsConnectionString: appInsights.properties.ConnectionString
-    postgresHost: deploymentMode == 'managed-services' ? postgres!.outputs.fqdn : ''
-    eventhubNamespace: deploymentMode == 'managed-services' ? eventHub!.outputs.namespaceName : ''
-    eventhubConnectionString: deploymentMode == 'managed-services' ? eventHub!.outputs.primaryConnectionString : ''
-  }
-}
-
 // ── Outputs ───────────────────────────────────────────────────────────────────
+// Container App is created in GitHub Actions deploy-app job after image is pushed to ACR
 
 output acrLoginServer string = acrLoginServer
-output containerAppUrl string = containerApp.outputs.appUrl
+output acrName string = resolvedAcrName
+output acaEnvId string = acaEnv.id
 output appInsightsConnectionString string = appInsights.properties.ConnectionString
+output resourceGroupName string = resourceGroup().name
+output deploymentMode string = deploymentMode
+output suffix string = suffix
