@@ -238,12 +238,16 @@ resource kafkaApp 'Microsoft.App/containerApps@2023-05-01' = if (deploymentMode 
               value: 'broker,controller'
             }
             {
-              name: 'KAFKA_LISTENER_SECURITY_PROTOCOL_MAP'
-              value: 'PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT'
+              name: 'KAFKA_LISTENERS'
+              value: 'PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093'
             }
             {
               name: 'KAFKA_ADVERTISED_LISTENERS'
-              value: 'PLAINTEXT://ca-kafka-${suffix}:9092'
+              value: 'PLAINTEXT://ca-kafka-${suffix}:9092,CONTROLLER://ca-kafka-${suffix}:9093'
+            }
+            {
+              name: 'KAFKA_LISTENER_SECURITY_PROTOCOL_MAP'
+              value: 'PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT'
             }
             {
               name: 'KAFKA_CONTROLLER_LISTENER_NAMES'
