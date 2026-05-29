@@ -207,6 +207,47 @@ resource couchbaseApp 'Microsoft.App/containerApps@2023-05-01' = if (deploymentM
   }
 }
 
+// Zookeeper container app (required for Kafka coordination)
+resource zookeeperApp 'Microsoft.App/containerApps@2023-05-01' = if (deploymentMode == 'docker-only') {
+  name: 'ca-zookeeper-${suffix}'
+  location: location
+  properties: {
+    managedEnvironmentId: acaEnv.id
+    configuration: {
+      ingress: {
+        external: false
+        targetPort: 2181
+      }
+    }
+    template: {
+      containers: [
+        {
+          name: 'zookeeper'
+          image: 'confluentinc/cp-zookeeper:7.5.1'
+          resources: {
+            cpu: json('0.5')
+            memory: '1Gi'
+          }
+          env: [
+            {
+              name: 'ZOOKEEPER_CLIENT_PORT'
+              value: '2181'
+            }
+            {
+              name: 'ZOOKEEPER_TICK_TIME'
+              value: '2000'
+            }
+          ]
+        }
+      ]
+      scale: {
+        minReplicas: 1
+        maxReplicas: 1
+      }
+    }
+  }
+}
+
 // Kafka container app
 resource kafkaApp 'Microsoft.App/containerApps@2023-05-01' = if (deploymentMode == 'docker-only') {
   name: 'ca-kafka-${suffix}'
@@ -230,44 +271,36 @@ resource kafkaApp 'Microsoft.App/containerApps@2023-05-01' = if (deploymentMode 
           }
           env: [
             {
-              name: 'KAFKA_NODE_ID'
+              name: 'KAFKA_BROKER_ID'
               value: '1'
             }
             {
-              name: 'KAFKA_PROCESS_ROLES'
-              value: 'broker,controller'
+              name: 'KAFKA_ZOOKEEPER_CONNECT'
+              value: 'ca-zookeeper-${suffix}:2181'
             }
             {
               name: 'KAFKA_LISTENERS'
-              value: 'PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093'
+              value: 'PLAINTEXT://0.0.0.0:9092'
             }
             {
               name: 'KAFKA_ADVERTISED_LISTENERS'
-              value: 'PLAINTEXT://ca-kafka-${suffix}:9092,CONTROLLER://ca-kafka-${suffix}:9093'
+              value: 'PLAINTEXT://ca-kafka-${suffix}:9092'
             }
             {
               name: 'KAFKA_LISTENER_SECURITY_PROTOCOL_MAP'
-              value: 'PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT'
+              value: 'PLAINTEXT:PLAINTEXT'
             }
             {
-              name: 'KAFKA_CONTROLLER_LISTENER_NAMES'
-              value: 'CONTROLLER'
-            }
-            {
-              name: 'KAFKA_CONTROLLER_QUORUM_VOTERS'
-              value: '1@ca-kafka-${suffix}:9093'
+              name: 'KAFKA_INTER_BROKER_LISTENER_NAME'
+              value: 'PLAINTEXT'
             }
             {
               name: 'KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR'
               value: '1'
             }
             {
-              name: 'KAFKA_OFFSETS_TOPIC_MIN_ISR'
-              value: '1'
-            }
-            {
-              name: 'KAFKA_LOG_DIRS'
-              value: '/tmp/kraft-combined-logs'
+              name: 'KAFKA_AUTO_CREATE_TOPICS_ENABLE'
+              value: 'true'
             }
           ]
         }
