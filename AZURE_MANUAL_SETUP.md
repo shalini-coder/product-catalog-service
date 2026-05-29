@@ -48,7 +48,7 @@ POSTGRES_PASSWORD="Postgres@Dev2024!"
 
 az postgres flexible-server create \
   --resource-group rg-product-catalog-poc \
-  --name psql-product-catalog-dev \
+  --name psql-product-catalog-dev-1 \
   --location eastus \
   --admin-user catalogadmin \
   --admin-password "$POSTGRES_PASSWORD" \
