@@ -264,7 +264,7 @@ resource kafkaApp 'Microsoft.App/containerApps@2023-05-01' = if (deploymentMode 
       containers: [
         {
           name: 'kafka'
-          image: 'confluentinc/cp-kafka:7.5.1'
+          image: 'confluentinc/cp-kafka:6.2.0'
           resources: {
             cpu: json('1')
             memory: '2Gi'
