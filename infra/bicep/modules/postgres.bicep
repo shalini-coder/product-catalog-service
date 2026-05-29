@@ -8,7 +8,7 @@ param adminLogin string
 param adminPassword string
 
 resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2023-06-01-preview' = {
-  name: 'psql-${suffix}'
+  name: 'psql-${suffix}-1'
   location: location
   sku: {
     name: 'Standard_B1ms'    // burstable, 1 vCore — scale up for prod
