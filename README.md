@@ -1,5 +1,6 @@
 # Product Catalog Service
 
+
 A production-ready **CQRS + DDD + Event-Driven** microservice built with Spring Boot 3.2, Java 21, PostgreSQL (write side), Couchbase (read side), and Kafka (event bus).
 
 ---
