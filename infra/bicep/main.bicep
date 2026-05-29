@@ -207,7 +207,78 @@ resource couchbaseApp 'Microsoft.App/containerApps@2023-05-01' = if (deploymentM
   }
 }
 
-// Kafka removed - using Azure Event Hubs instead in managed-services mode
+// Kafka container app
+resource kafkaApp 'Microsoft.App/containerApps@2023-05-01' = if (deploymentMode == 'docker-only') {
+  name: 'ca-kafka-${suffix}'
+  location: location
+  properties: {
+    managedEnvironmentId: acaEnv.id
+    configuration: {
+      ingress: {
+        external: false
+        targetPort: 9092
+      }
+    }
+    template: {
+      containers: [
+        {
+          name: 'kafka'
+          image: 'apache/kafka:latest'
+          resources: {
+            cpu: json('1')
+            memory: '2Gi'
+          }
+          env: [
+            {
+              name: 'KAFKA_NODE_ID'
+              value: '1'
+            }
+            {
+              name: 'KAFKA_PROCESS_ROLES'
+              value: 'broker,controller'
+            }
+            {
+              name: 'KAFKA_LISTENERS'
+              value: 'PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093'
+            }
+            {
+              name: 'KAFKA_ADVERTISED_LISTENERS'
+              value: 'PLAINTEXT://ca-kafka-${suffix}:9092,CONTROLLER://ca-kafka-${suffix}:9093'
+            }
+            {
+              name: 'KAFKA_LISTENER_SECURITY_PROTOCOL_MAP'
+              value: 'PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT'
+            }
+            {
+              name: 'KAFKA_CONTROLLER_LISTENER_NAMES'
+              value: 'CONTROLLER'
+            }
+            {
+              name: 'KAFKA_CONTROLLER_QUORUM_VOTERS'
+              value: '1@ca-kafka-${suffix}:9093'
+            }
+            {
+              name: 'KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR'
+              value: '1'
+            }
+            {
+              name: 'KAFKA_OFFSETS_TOPIC_MIN_ISR'
+              value: '1'
+            }
+            {
+              name: 'KAFKA_LOG_DIRS'
+              value: '/tmp/kraft-combined-logs'
+            }
+          ]
+        }
+      ]
+      scale: {
+        minReplicas: 1
+        maxReplicas: 1
+      }
+    }
+  }
+}
 
 // ── MANAGED SERVICES mode resources ──────────────────────────────────────────
 
