@@ -321,6 +321,6 @@ output appInsightsConnectionString string = appInsights.properties.ConnectionStr
 output resourceGroupName string = resourceGroup().name
 output deploymentMode string = deploymentMode
 output suffix string = suffix
-output postgresHost string = deploymentMode == 'docker-only' ? 'ca-postgres-${suffix}' : 'postgres'
-output couchbaseHost string = deploymentMode == 'docker-only' ? 'ca-couchbase-${suffix}' : 'couchbase'
-output kafkaHost string = deploymentMode == 'docker-only' ? 'ca-kafka-${suffix}' : 'kafka'
+output postgresHost string = deploymentMode == 'docker-only' ? 'ca-postgres-${suffix}' : 'postgres.postgres.svc.cluster.local'
+output couchbaseHost string = deploymentMode == 'docker-only' ? 'ca-couchbase-${suffix}' : 'couchbase.couchbase.svc.cluster.local'
+output kafkaHost string = deploymentMode == 'docker-only' ? 'ca-kafka-${suffix}' : 'kafka.kafka.svc.cluster.local'
