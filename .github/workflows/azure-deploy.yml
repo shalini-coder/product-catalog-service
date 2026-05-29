@@ -175,10 +175,5 @@ jobs:
           fi
 
       - name: Show app URL
-        run: |
-          ENV=${{ github.event.inputs.environment || 'dev' }}
-          az containerapp show \
-            --name "ca-product-catalog-${ENV}" \
-            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-            --query "properties.configuration.ingress.fqdn" \
-            --output tsv
+        if: success()
+        run: echo "🚀 Application deployed! Access it at the Container App FQDN in Azure Portal"
