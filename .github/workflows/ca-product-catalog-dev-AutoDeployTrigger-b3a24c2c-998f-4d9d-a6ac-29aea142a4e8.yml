@@ -1,0 +1,49 @@
+name: Trigger auto deployment for ca-product-catalog-dev
+
+# When this action will be executed
+on:
+  # Automatically trigger it when detected changes in repo
+  push:
+    branches: 
+      [ main ]
+    paths:
+    - '**'
+    - '.github/workflows/ca-product-catalog-dev-AutoDeployTrigger-b3a24c2c-998f-4d9d-a6ac-29aea142a4e8.yml'
+
+  # Allow manual trigger 
+  workflow_dispatch:      
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions: 
+      id-token: write #This is required for requesting the OIDC JWT Token
+      contents: read #Required when GH token is used to authenticate with private repo
+
+    steps:
+      - name: Checkout to the branch
+        uses: actions/checkout@v2
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.CAPRODUCTCATALOGDEV_AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.CAPRODUCTCATALOGDEV_AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.CAPRODUCTCATALOGDEV_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and push container image to registry
+        uses: azure/container-apps-deploy-action@v2
+        with:
+          appSourcePath: ${{ github.workspace }}
+          _dockerfilePathKey_: _dockerfilePath_
+          _targetLabelKey_: _targetLabel_
+          registryUrl: acrproductcatalogdev.azurecr.io
+          registryUsername: ${{ secrets.CAPRODUCTCATALOGDEV_REGISTRY_USERNAME }}
+          registryPassword: ${{ secrets.CAPRODUCTCATALOGDEV_REGISTRY_PASSWORD }}
+          containerAppName: ca-product-catalog-dev
+          resourceGroup: rg-product-catalog-poc
+          imageToBuild: acrproductcatalogdev.azurecr.io/ca-product-catalog-dev:${{ github.sha }}
+          _buildArgumentsKey_: |
+            _buildArgumentsValues_
+
+
