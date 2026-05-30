@@ -1,0 +1,123 @@
+name: Deploy Container Apps with KRaft
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options: [dev]
+      location:
+        description: 'Azure region'
+        required: true
+        default: 'canadacentral'
+        type: choice
+        options: [canadacentral, eastus, westus2]
+
+env:
+  RESOURCE_GROUP: rg-product-catalog-poc
+  TEMPLATE_FILE: infra/bicep/container-apps-kraft.bicep
+  PARAMETER_FILE: infra/bicep/parameters/container-apps-kraft-dev.bicepparam
+
+jobs:
+  deploy:
+    name: Deploy to Azure Container Apps
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set subscription
+        run: |
+          az account set --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          echo "✅ Switched to subscription: ${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+
+      - name: Create resource group
+        run: |
+          az group create \
+            --name ${{ env.RESOURCE_GROUP }} \
+            --location ${{ github.event.inputs.location || 'canadacentral' }}
+          echo "✅ Resource group ready: ${{ env.RESOURCE_GROUP }}"
+
+      - name: Validate Bicep template
+        run: |
+          az deployment group validate \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --template-file ${{ env.TEMPLATE_FILE }} \
+            --parameters ${{ env.PARAMETER_FILE }}
+          echo "✅ Bicep template validation passed"
+
+      - name: Deploy Bicep template
+        id: deploy
+        run: |
+          DEPLOYMENT=$(az deployment group create \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --template-file ${{ env.TEMPLATE_FILE }} \
+            --parameters ${{ env.PARAMETER_FILE }} \
+            --output json)
+
+          # Extract outputs
+          APP_URL=$(echo $DEPLOYMENT | jq -r '.properties.outputs.appUrl.value')
+          KAFKA_UI_FQDN=$(echo $DEPLOYMENT | jq -r '.properties.outputs.kafkaUiFqdn.value')
+
+          echo "app_url=$APP_URL" >> $GITHUB_OUTPUT
+          echo "kafka_ui_url=https://$KAFKA_UI_FQDN" >> $GITHUB_OUTPUT
+
+          echo "✅ Deployment completed successfully"
+
+      - name: Wait for containers to start
+        run: |
+          echo "⏳ Waiting 2 minutes for containers to start..."
+          sleep 120
+
+      - name: Health check
+        continue-on-error: true
+        run: |
+          echo "🏥 Checking application health..."
+          curl -s -m 10 "${{ steps.deploy.outputs.app_url }}/actuator/health" || echo "⚠️  Health check not ready yet, containers may still be starting"
+
+      - name: Display deployment summary
+        run: |
+          echo ""
+          echo "========================================================"
+          echo "✅ DEPLOYMENT COMPLETE"
+          echo "========================================================"
+          echo ""
+          echo "📍 Resource Group: ${{ env.RESOURCE_GROUP }}"
+          echo "📍 Location: ${{ github.event.inputs.location || 'canadacentral' }}"
+          echo ""
+          echo "🌐 Application URL: ${{ steps.deploy.outputs.app_url }}"
+          echo "📊 Kafka UI: ${{ steps.deploy.outputs.kafka_ui_url }}"
+          echo ""
+          echo "🚀 Services Deployed:"
+          echo "   ✓ PostgreSQL (write side)"
+          echo "   ✓ Kafka with KRaft (event streaming)"
+          echo "   ✓ Couchbase (read side)"
+          echo "   ✓ Kafka UI (monitoring)"
+          echo "   ✓ Spring Boot App (CQRS)"
+          echo ""
+          echo "📝 Next Steps:"
+          echo "   1. Wait 3-5 minutes for containers to stabilize"
+          echo "   2. Test health: curl ${{ steps.deploy.outputs.app_url }}/actuator/health"
+          echo "   3. View Kafka UI: ${{ steps.deploy.outputs.kafka_ui_url }}"
+          echo "   4. Login: POST ${{ steps.deploy.outputs.app_url }}/api/v1/auth/login"
+          echo ""
+
+      - name: Notify deployment status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Deployment succeeded!"
+            echo "App URL: ${{ steps.deploy.outputs.app_url }}"
+          else
+            echo "❌ Deployment failed. Check logs above."
+          fi
